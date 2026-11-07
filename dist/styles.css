@@ -175,6 +175,11 @@ dialog::backdrop { background: #00000032; }
 textarea { resize: vertical; }
 .toast { position: fixed; right: 16px; bottom: 16px; max-width: calc(100vw - 32px); z-index: 2; padding: 9px 13px; border-radius: 6px; color: #fff; background: var(--accent-dark); }
 
+@media (min-width: 1500px) {
+  :root { --width: 1600px; }
+  .top-inner, .layout { padding-left: 40px; }
+  .layout { grid-template-columns: 230px minmax(0, 1fr); gap: 34px; }
+}
 @media (min-width: 641px) {
   .sidebar-inner { position: sticky; top: calc(var(--header-height) + 24px); max-height: calc(100dvh - var(--header-height) - 40px); overflow-y: auto; margin: -3px; padding: 3px; }
 }
