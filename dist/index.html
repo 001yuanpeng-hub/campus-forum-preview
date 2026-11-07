@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="重电校园站，面向同学的校园问答与经验分享原型。">
+  <meta name="theme-color" content="#f6f8f4">
+  <title>重电校园站 · 校园问答与经验分享</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 18V9l9-5 9 5v9M7 19v-6l5-3 5 3v6M12 14v6"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6a7 7 0 0 0-8-1v14a7 7 0 0 1 8 1 7 7 0 0 1 8-1V5a7 7 0 0 0-8 1v14"/></symbol>
+    <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M3 12a20 20 0 0 0 18 0M12 12v3"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M19 10c0 5-7 10-7 10S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 11.5a8 8 0 0 1-8 8c-1.2 0-2.3-.2-3.4-.7L4 20l1.2-4.2a8 8 0 1 1 14.8-4.3Z"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12s3.2-6 9.5-6 9.5 6 9.5 6-3.2 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.3"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5m6 6-6-6 6-6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 2c0 6-4 10-10 10 6 0 10 4 10 10 0-6 4-10 10-10-6 0-10-4-10-10Z"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  </svg>
+
+  <header class="topbar">
+    <div class="top-inner">
+      <a class="brand" href="#" id="brand"><span class="brand-icon"><svg class="icon"><use href="#i-logo"/></svg></span><span>重电校园站<small>CAMPUS FORUM</small></span></a>
+      <form class="search" id="search" role="search">
+        <svg class="icon"><use href="#i-search"/></svg>
+        <input id="query" type="search" aria-label="搜索校园帖子" placeholder="搜索帖子、课程或关键词" autocomplete="off">
+        <kbd aria-hidden="true">/</kbd>
+      </form>
+      <button class="button primary header-post" data-compose><svg class="icon"><use href="#i-plus"/></svg><span>发布帖子</span></button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" aria-label="版块与校区">
+      <div class="rail-label">社区版块</div>
+      <nav id="categories" class="category-nav" aria-label="社区版块"></nav>
+      <div class="campus-block">
+        <div class="rail-label">按校区筛选</div>
+        <div id="campuses" class="campus-filters" aria-label="按校区筛选"></div>
+      </div>
+      <div class="rail-footer"><span class="demo-dot"></span>学生社区概念原型<br><span class="rail-muted">重庆电子科技职业大学 · 非官方</span></div>
+    </aside>
+
+    <main id="main" tabindex="-1">
+      <section id="feed-page">
+        <section class="hero" id="hero" aria-labelledby="hero-title">
+          <svg class="hero-art" viewBox="0 0 304 220" aria-hidden="true" fill="none">
+            <defs><pattern id="hero-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0v20" stroke="#b8e1ce" stroke-opacity=".14"/></pattern></defs>
+            <path d="M0 0h304v220H0z" fill="url(#hero-grid)"/>
+            <circle cx="214" cy="87" r="55" fill="#91cfaf" fill-opacity=".13" stroke="#a3dabb" stroke-opacity=".31"/>
+            <circle cx="214" cy="87" r="73" stroke="#a3dabb" stroke-opacity=".16"/>
+            <path d="M45 187h258M59 177h223M79 165h190" stroke="#8dd0ad" stroke-opacity=".5" stroke-linecap="round"/>
+            <path d="M89 163v-41h29v41m12 0V85l46-29 47 29v78m10 0v-54h31v54M124 90l52-34 54 34M150 163v-34h52v34m-52-60h13v13h-13zm41 0h13v13h-13zM176 129v34m-14 0v-20h28v20" fill="#1e5446" stroke="#c1e7ca" stroke-width="1.35" stroke-linejoin="round"/>
+            <path d="M89 133h29m-29 12h29m115-23h31m-31 13h31m-31 13h31M176 56V38m0 1h22l-7 6 7 6h-22" stroke="#d0e9b4" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M69 114v20m-10-10h20m198-61v16m-8-8h16M117 62v10m-5-5h10" stroke="#f0dba2" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="275" cy="103" r="2" fill="#f0dba2"/><circle cx="102" cy="88" r="2" fill="#a9dbc0"/>
+          </svg>
+          <div class="hero-content">
+            <div class="hero-label"><span></span> 重电同学 · 校园共建</div>
+            <h1 id="hero-title">把校园里的经验，<br>留给下一位同学。</h1>
+            <p>从一门课、一次实训，到第一份实习。</p>
+            <button class="button hero-button" type="button" id="explore">浏览校园讨论<svg class="icon"><use href="#i-arrow"/></svg></button>
+          </div>
+        </section>
+
+        <section class="discussion" id="discussion" aria-labelledby="feed-title">
+          <div class="section-heading"><div><h2 id="feed-title">校园讨论</h2><p id="feed-subtitle">看看同学们最近在聊什么。</p></div><span class="sample-pill"><span></span> 演示内容</span></div>
+          <div class="feed-tools"><div id="tabs" class="feed-tabs" aria-label="帖子筛选"></div><button class="text-button" id="reset-filters" type="button" hidden>清除筛选</button></div>
+          <div id="feed" class="feed" aria-live="polite"></div>
+        </section>
+      </section>
+      <section id="topic-page" hidden aria-label="帖子详情"></section>
+    </main>
+
+    <aside class="right-rail" aria-label="社区指南与热门帖子">
+      <section class="panel starter">
+        <div class="panel-mark"><svg class="icon"><use href="#i-compass"/></svg></div>
+        <div class="panel-label">第一次来？</div>
+        <h2>从一篇好帖子开始</h2>
+        <p>写清楚你的校区、具体问题和试过的办法。同学更容易给出能用的答案。</p>
+        <a class="panel-link" href="#topic/welcome">阅读发帖指南<svg class="icon"><use href="#i-arrow"/></svg></a>
+      </section>
+      <section class="panel popular">
+        <div class="popular-heading"><svg class="icon"><use href="#i-spark"/></svg><h2>值得一看</h2></div>
+        <div id="featured"></div>
+      </section>
+      <p class="footnote">这是独立原型。预置帖子为样例，试发的内容只保存在当前浏览器。</p>
+    </aside>
+  </div>
+
+  <dialog id="composer" aria-labelledby="composer-title">
+    <form id="post-form" class="composer-form">
+      <div class="dialog-head"><div><div class="panel-label">校园讨论</div><h2 id="composer-title">发布帖子</h2></div><button class="icon-button" id="close-composer" type="button" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button></div>
+      <p class="form-note">演示模式。内容保存在当前浏览器，请使用示例信息。</p>
+      <label>标题<input name="title" required maxlength="80" placeholder="一句话说清楚你的问题或经验"></label>
+      <div class="form-grid"><label>版块<select name="category" required></select></label><label>校区<select name="campus" required></select></label></div>
+      <label>正文<textarea name="body" required maxlength="3000" rows="5" placeholder="写写背景、做过的尝试，或值得记下的步骤。"></textarea></label>
+      <div class="dialog-actions"><button class="button secondary" id="cancel-post" type="button">取消</button><button class="button primary" type="submit">发布帖子</button></div>
+    </form>
+  </dialog>
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>
