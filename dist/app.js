@@ -27,6 +27,10 @@ const seed = [
   { id: 'lab-notes', title: '我怎么写实验记录，复现时才不用从头再试', category: 'study', campus: '两江', author: '周同学', initial: '周', color: 'blue', time: '昨天 17:30', views: 93, body: '每次实验我会记录四项：软件版本、输入条件、实际结果、下一次要验证的变化。调试时一次只改一处，这样即使实验没成功，也能判断哪一步出了问题。\n\n如果发给同学，记得附上能复现的最小例子，并说明依赖和数据从哪里来。', replies: [
     { id: 'r4', author: '许同学', initial: '许', color: 'rose', time: '昨天 18:10', body: '记版本特别有用，同一个工程换电脑后遇到过好几次环境差异。' },
   ] },
+  { id: 'lab-checklist', title: '第一次进实训室前，哪些东西值得提前准备？', category: 'study', campus: '永川', author: '叶同学', initial: '叶', color: 'green', time: '昨天 14:15', views: 67, body: '准备整理一份实训前检查清单。我想到的是提前确认软件版本、下载老师给的材料、准备数据线。哪些东西你们是到了教室才发现缺的？', replies: [] },
+  { id: 'campus-map', title: '新生想问：第一次去另一个校区，怎么确认上课地点？', category: 'life', campus: '全校', author: '方同学', initial: '方', color: 'violet', time: '昨天 10:05', views: 52, body: '课表上只看到楼栋简称，有没有同学知道应该到哪里核对校区和教室？如果是临时换教室，通常看哪个通知最准确？', replies: [] },
+  { id: 'portfolio', title: '作品集里只有课程项目，投实习时可以怎么展示？', category: 'career', campus: '大学城', author: '郭同学', initial: '郭', color: 'gold', time: '前天 18:42', views: 84, body: '做过两个小项目，一个是小组完成的，另一个是自己调试的。我准备挑一个写清楚自己负责的部分和成果。想听听有面试经验的同学觉得哪些信息最有用。', replies: [] },
+  { id: 'study-group', title: '两江校区有想一起复习 C 语言的吗？', category: 'study', campus: '两江', author: '罗同学', initial: '罗', color: 'blue', time: '前天 12:08', views: 41, body: '想约几个同学，每次挑两道题互相讲思路。我想先复习数组和指针。时间可以在帖子里讨论。', replies: [] },
   { id: 'welcome', title: '第一次发帖？看看这份校园站发帖指南', category: 'notice', campus: '全校', author: '校园站', initial: '站', color: 'green', time: '站务指南', views: 108, body: '提问时，请写清楚校区、你想解决的问题、已经试过的方法，以及具体卡在哪一步。\n\n分享经验时，标明适用时间和范围。涉及开放时间、报名等可能变化的信息，尽量附上原始通知。\n\n这是一个交互原型。预置帖子和浏览数为样例，试发内容只存在当前浏览器。请勿填写姓名、学号、手机号或取件码。', replies: [] },
 ];
 
@@ -111,24 +115,31 @@ function renderFeed() {
   if (filters.tab === 'popular') matching.sort((first, second) => second.views - first.views);
   const filtered = filters.category !== 'all' || filters.campus !== 'all' || filters.tab !== 'latest' || words.length > 0;
   $('#feed-title').textContent = words.length ? '搜索结果' : filters.category === 'all' ? '校园讨论' : categoryName(filters.category);
-  $('#feed-subtitle').textContent = filtered ? `找到 ${matching.length} 篇帖子` : '看看同学们最近在聊什么。';
+  $('#feed-subtitle').textContent = `${matching.length} 篇帖子`;
   $('#reset-filters').hidden = !filtered;
 
-  feed.innerHTML = matching.length ? matching.map((topic) => `
-    <article class="topic-row">
-      ${avatar(topic)}
-      <div>
-        <a class="topic-title" href="${topicHref(topic.id)}">${escapeHtml(topic.title)}</a>
-        <p class="excerpt">${escapeHtml(topic.body)}</p>
-        <div class="topic-meta">${topicMeta(topic)}<span>${escapeHtml(topic.time)}</span></div>
-      </div>
-      <div class="metrics">
-        <span aria-label="${repliesFor(topic).length} 条回复">${icon('chat')}${repliesFor(topic).length}</span>
-        <span class="views" aria-label="${topic.views} 次浏览">${icon('eye')}${topic.views}</span>
-      </div>
-    </article>`).join('') : `
-    <div class="empty"><h3>还没有符合条件的帖子</h3><p>试试换一个关键词，或者查看全部讨论。</p>
-    <button class="button secondary" data-reset type="button">查看全部讨论</button></div>`;
+  if (!matching.length) {
+    feed.innerHTML = `<div class="empty"><h2>还没有符合条件的帖子</h2><p>试试换一个关键词，或者查看全部讨论。</p>
+      <button class="button secondary" data-reset type="button">查看全部讨论</button></div>`;
+    return;
+  }
+
+  feed.innerHTML = `<table class="topic-list">
+    <caption class="visually-hidden">校园帖子列表</caption>
+    <thead><tr><th scope="col">主题</th><th scope="col" class="number-column">回复</th><th scope="col" class="number-column desktop-column">浏览</th><th scope="col" class="time-column desktop-column">发布</th></tr></thead>
+    <tbody>${matching.map((topic) => {
+      const replyCount = repliesFor(topic).length;
+      const time = escapeHtml(topic.time);
+      return `<tr class="topic-row">
+        <th scope="row">
+          <a class="topic-title" href="${topicHref(topic.id)}">${escapeHtml(topic.title)}</a>
+          <span class="topic-meta">${topicMeta(topic)}<span class="mobile-time">${time}</span></span>
+        </th>
+        <td class="reply-count"><span class="reply-glyph">${icon('chat')}<span class="visually-hidden">回复数：</span></span>${replyCount}</td>
+        <td class="desktop-column">${topic.views}</td>
+        <td class="desktop-column">${time}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
 }
 
 function authorLine(person) {
@@ -224,7 +235,6 @@ function showToast(message) {
 $('#categories').innerHTML = categories.map(({ id, name, icon: glyph }) => filterButton('category', id, name, 'nav-button', icon(glyph))).join('');
 $('#campuses').innerHTML = filterButton('campus', 'all', '全部校区', 'campus-button') + campuses.map((name) => filterButton('campus', name, name, 'campus-button')).join('');
 $('#tabs').innerHTML = tabs.map(({ id, name }) => filterButton('tab', id, name, 'tab')).join('');
-$('#featured').innerHTML = [seed[1], seed[0], seed[4]].map((topic, index) => `<a class="featured-link" href="${topicHref(topic.id)}"><span>0${index + 1}</span><span>${escapeHtml(topic.title)}</span></a>`).join('');
 postForm.elements.category.innerHTML = categories.filter(({ id }) => id !== 'all').map(({ id, name }) => `<option value="${id}">${name}</option>`).join('');
 postForm.elements.campus.innerHTML = [...campuses, '全校'].map((name) => `<option>${name}</option>`).join('');
 
@@ -234,7 +244,10 @@ document.addEventListener('click', (event) => {
     filters[filter.dataset.filter] = filter.dataset.value;
     showFeed();
   }
-  if (event.target.closest('[data-reset], #reset-filters')) resetFilters();
+  if (event.target.closest('[data-reset], #reset-filters')) {
+    resetFilters();
+    $('#tabs [data-value="latest"]').focus({ preventScroll: true });
+  }
   if (event.target.closest('[data-compose]')) {
     if (filters.category !== 'all') postForm.elements.category.value = filters.category;
     if (filters.campus !== 'all') postForm.elements.campus.value = filters.campus;
@@ -252,11 +265,10 @@ $('#brand').addEventListener('click', (event) => {
   resetFilters();
   window.scrollTo(0, 0);
 });
-$('#explore').addEventListener('click', () => $('#discussion').scrollIntoView({ block: 'start' }));
 $('#search').addEventListener('submit', (event) => {
   event.preventDefault();
   showFeed();
-  $('#discussion').scrollIntoView({ block: 'start' });
+  $('#feed-title').scrollIntoView({ block: 'start' });
 });
 query.addEventListener('input', () => {
   filters.query = query.value;
