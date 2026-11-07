@@ -9,7 +9,7 @@ const categories = [
 ];
 const campuses = ['大学城', '永川', '两江'];
 const tabs = [
-  { id: 'latest', name: '最新' },
+  { id: 'latest', name: '最新动态' },
   { id: 'popular', name: '热门' },
   { id: 'unanswered', name: '待回答' },
 ];
@@ -80,8 +80,9 @@ function categoryName(id) {
   return categories.find((category) => category.id === id)?.name || '校园讨论';
 }
 
-function topicHref(id) {
-  return `#topic/${encodeURIComponent(id)}`;
+function topicHref(id, replyId) {
+  const topicPath = `#topic/${encodeURIComponent(id)}`;
+  return replyId ? `${topicPath}/${encodeURIComponent(replyId)}` : topicPath;
 }
 
 function topicMeta(topic) {
@@ -92,6 +93,13 @@ function topicMeta(topic) {
 
 function repliesFor(topic) {
   return [...topic.replies, ...(demo.replies[topic.id] || [])];
+}
+
+function activityOrder(topic) {
+  // Browser-created posts and replies use IDs with their creation timestamp.
+  // Sample topics have a stable order in the fixture list.
+  const id = demo.replies[topic.id]?.at(-1)?.id ?? topic.id;
+  return Number(id.match(/^(?:demo|reply)-(\d+)$/)?.[1]) || 0;
 }
 
 function filterButton(key, id, label, className, glyph = '') {
@@ -113,6 +121,7 @@ function renderFeed() {
   });
 
   if (filters.tab === 'popular') matching.sort((first, second) => second.views - first.views);
+  if (filters.tab === 'latest') matching.sort((first, second) => activityOrder(second) - activityOrder(first));
   const filtered = filters.category !== 'all' || filters.campus !== 'all' || filters.tab !== 'latest' || words.length > 0;
   $('#feed-title').textContent = words.length ? '搜索结果' : filters.category === 'all' ? '校园讨论' : categoryName(filters.category);
   $('#feed-subtitle').textContent = `${matching.length} 篇帖子`;
@@ -126,18 +135,30 @@ function renderFeed() {
 
   feed.innerHTML = `<table class="topic-list">
     <caption class="visually-hidden">校园帖子列表</caption>
-    <thead><tr><th scope="col">主题</th><th scope="col" class="number-column">回复</th><th scope="col" class="number-column desktop-column">浏览</th><th scope="col" class="time-column desktop-column">发布</th></tr></thead>
+    <thead><tr>
+      <th scope="col">主题</th>
+      <th scope="col" class="people-column">参与</th>
+      <th scope="col" class="number-column">回复</th>
+      <th scope="col" class="number-column views-column">浏览</th>
+      <th scope="col" class="time-column desktop-column">最近动态</th>
+    </tr></thead>
     <tbody>${matching.map((topic) => {
-      const replyCount = repliesFor(topic).length;
-      const time = escapeHtml(topic.time);
+      const replies = repliesFor(topic);
+      const latest = replies.at(-1);
+      const people = [...new Map([topic, ...replies].map((person) => [person.author, person])).values()].slice(0, 3);
+      const names = escapeHtml(people.map((person) => person.author).join('、'));
+      const activityLabel = latest ? '查看最新回复' : '查看主题';
+      const time = escapeHtml((latest ?? topic).time);
+      const activity = `<a class="activity-link" href="${topicHref(topic.id, latest?.id)}" aria-label="${activityLabel}：${escapeHtml(topic.title)}，${time}">${time}</a>`;
       return `<tr class="topic-row">
         <th scope="row">
           <a class="topic-title" href="${topicHref(topic.id)}">${escapeHtml(topic.title)}</a>
-          <span class="topic-meta">${topicMeta(topic)}<span class="mobile-time">${time}</span></span>
+          <span class="topic-meta">${topicMeta(topic)}<span class="mobile-time">${activity}</span></span>
         </th>
-        <td class="reply-count"><span class="reply-glyph">${icon('chat')}<span class="visually-hidden">回复数：</span></span>${replyCount}</td>
-        <td class="desktop-column">${topic.views}</td>
-        <td class="desktop-column">${time}</td>
+        <td class="people-column"><span class="participant-list" title="${names}"><span class="visually-hidden">${names}</span>${people.map(avatar).join('')}</span></td>
+        <td class="reply-count"><span class="reply-glyph">${icon('chat')}<span class="visually-hidden">回复数：</span></span>${replies.length}</td>
+        <td class="views-column">${topic.views}</td>
+        <td class="desktop-column">${activity}</td>
       </tr>`;
     }).join('')}</tbody></table>`;
 }
@@ -159,7 +180,7 @@ function renderTopic(topic) {
     <section class="replies" aria-labelledby="reply-heading">
       <h2 id="reply-heading">${replies.length} 条回复</h2>
       ${replies.length ? replies.map((reply) => `
-        <article class="reply${topic.accepted === reply.id ? ' solved-reply' : ''}">
+        <article id="reply-anchor-${escapeHtml(reply.id)}" class="reply${topic.accepted === reply.id ? ' solved-reply' : ''}" tabindex="-1">
           ${authorLine(reply)}
           ${topic.accepted === reply.id ? `<div class="topic-meta"><span class="solved">${icon('check')}采纳答案</span></div>` : ''}
           <p>${escapeHtml(reply.body)}</p>
@@ -189,13 +210,20 @@ function renderTopic(topic) {
 }
 
 function renderRoute(moveFocus = false) {
-  const id = location.hash.match(/^#topic\/([a-z0-9-]+)$/)?.[1];
+  const [, id, replyId] = location.hash.match(/^#topic\/([a-z0-9-]+)(?:\/([a-z0-9-]+))?$/) ?? [];
   const topic = [...demo.posts, ...seed].find((item) => item.id === id);
   $('#feed-page').hidden = Boolean(id);
   topicPage.hidden = !id;
   if (topic) {
     renderTopic(topic);
     document.title = `${topic.title} · 重电校园站`;
+    const reply = replyId && document.getElementById(`reply-anchor-${replyId}`);
+    if (reply) {
+      reply.classList.add('reply-target');
+      reply.scrollIntoView({ block: 'start' });
+      if (moveFocus) reply.focus({ preventScroll: true });
+      return;
+    }
   } else if (id) {
     topicPage.innerHTML = `<a class="back-link" href="#">${icon('back')}返回讨论</a><section class="topic-card"><h1>当前浏览器没有这篇帖子</h1><p>演示中发布的内容只能在发布时使用的浏览器中查看。</p></section>`;
     document.title = '帖子详情 · 重电校园站';
@@ -237,6 +265,14 @@ $('#campuses').innerHTML = filterButton('campus', 'all', '全部校区', 'campus
 $('#tabs').innerHTML = tabs.map(({ id, name }) => filterButton('tab', id, name, 'tab')).join('');
 postForm.elements.category.innerHTML = categories.filter(({ id }) => id !== 'all').map(({ id, name }) => `<option value="${id}">${name}</option>`).join('');
 postForm.elements.campus.innerHTML = [...campuses, '全校'].map((name) => `<option>${name}</option>`).join('');
+
+feed.addEventListener('click', (event) => {
+  if (!window.matchMedia('(max-width: 640px)').matches || event.button !== 0
+    || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey
+    || event.target.closest('a, button') || window.getSelection()?.isCollapsed === false) return;
+  const title = event.target.closest('.topic-row')?.querySelector('.topic-title');
+  if (title) location.hash = title.hash;
+});
 
 document.addEventListener('click', (event) => {
   const filter = event.target.closest('[data-filter]');
