@@ -3,37 +3,43 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="重电校园站，面向同学的校园问答与经验分享原型。">
+  <meta name="description" content="重电校园站，面向重庆电子科技职业大学同学的校园问答、经验分享与互助社区原型。">
   <meta name="theme-color" content="#ffffff">
-  <title>重电校园站 · 校园问答与经验分享</title>
+  <title>重电校园站 · 校园问答与互助社区</title>
   <link rel="stylesheet" href="styles.css">
   <script defer src="app.js"></script>
 </head>
 <body>
   <svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 18V9l9-5 9 5v9M7 19v-6l5-3 5 3v6M12 14v6"/></symbol>
-    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
-    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3Z"/><path d="M12 8.5 8.5 10.5v4L12 16.5l3.5-2v-4L12 8.5Z"/><path d="M12 3v5.5M4 7.5l4.5 3M20 7.5l-4.5 3"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V19a2 2 0 0 1-2 2h-4v-6h-4v6H6a2 2 0 0 1-2-2v-8.5Z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
-    <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6a7 7 0 0 0-8-1v14a7 7 0 0 1 8 1 7 7 0 0 1 8-1V5a7 7 0 0 0-8 1v14"/></symbol>
-    <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M3 12a20 20 0 0 0 18 0M12 12v3"/></symbol>
-    <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M5 19c2-5 6-9 11-11M7 16C3 8 12 5 20 4c0 9-3 16-11 15"/></symbol>
-    <symbol id="i-megaphone" viewBox="0 0 24 24"><path d="M3 10v4a1 1 0 0 0 1 1h4l8 4V5l-8 4H4a1 1 0 0 0-1 1zm5-1v6m-2 0 2 5h3l-2-4m10-5h2m-2-4 2-1m-2 9 2 1"/></symbol>
-    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M19 10c0 5-7 10-7 10S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.4"/></symbol>
-    <symbol id="i-map" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15m6-12v15"/></symbol>
-    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4c4-3 8 3 14 0v10c-6 3-10-3-14 0"/></symbol>
-    <symbol id="i-waves" viewBox="0 0 24 24"><path d="M3 8c3 0 3-2 6-2s3 2 6 2 3-2 6-2M3 13c3 0 3-2 6-2s3 2 6 2 3-2 6-2M3 18c3 0 3-2 6-2s3 2 6 2 3-2 6-2"/></symbol>
-    <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></symbol>
-    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 1 1 4.5 2.6c-1 .6-1.5 1-1.5 2.4m0 2.5h.01"/></symbol>
-    <symbol id="i-notes" viewBox="0 0 24 24"><path d="M7 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2 5h7m-7 4h7m-7 4h4"/></symbol>
-    <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 3v3m6-3v3m-6 12v3m6-3v3M3 9h3m-3 6h3m12-6h3m-3 6h3m-11-5h4v4h-4z"/></symbol>
-    <symbol id="i-team" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 19v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1m1-14a3 3 0 0 1 0 6m2 3a4 4 0 0 1 3 4v1"/></symbol>
-    <symbol id="i-id-card" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M6 15a2.5 2.5 0 0 1 5 0m3-5h4m-4 4h4"/></symbol>
-    <symbol id="i-link" viewBox="0 0 24 24"><path d="m10 14 4-4m-6 2-2 2a3 3 0 0 0 4 4l3-3m-2-6 3-3a3 3 0 1 1 4 4l-2 2"/></symbol>
-    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 11.5a8 8 0 0 1-8 8c-1.2 0-2.3-.2-3.4-.7L4 20l1.2-4.2a8 8 0 1 1 14.8-4.3Z"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M2 6a3 3 0 0 1 3-3h5a3 3 0 0 1 2 1 3 3 0 0 1 2-1h5a3 3 0 0 1 3 3v12a2 2 0 0 1-2 2h-6a2 2 0 0 0-2 2 2 2 0 0 0-2-2H4a2 2 0 0 1-2-2V6Z"/><path d="M12 4v16"/></symbol>
+    <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7"/><path d="M3 12.5h18"/></symbol>
+    <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M4 8h13v8a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8Z"/><path d="M8 4v1.5M12 4v1.5"/></symbol>
+    <symbol id="i-megaphone" viewBox="0 0 24 24"><path d="m4 11 13-5v12l-13-5Z"/><path d="M4 11H3a1 1 0 0 0-1 1v0a1 1 0 0 0 1 1h1"/><path d="M7.5 14.5 9 19.5a1 1 0 0 0 1 .5h1a1 1 0 0 0 1-1l-.8-3.2"/><path d="M20 9.5c1 1.5 1 3.5 0 5"/></symbol>
+    <symbol id="i-package" viewBox="0 0 24 24"><path d="M12 2.8 4 7.2v9.6l8 4.4 8-4.4V7.2L12 2.8Z"/><path d="m4 7.2 8 4.4 8-4.4M12 11.6V21M8 5l8 4.4"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 8h12l1 11.5A2 2 0 0 1 17 21H7a2 2 0 0 1-2-1.5L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.7-6.5-11a6.5 6.5 0 1 1 13 0c0 5.3-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20V6.5Z"/><path d="M9 4v13.5M15 6.5V20"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 5h11.5a1 1 0 0 1 .8 1.6L15 9.5l2.3 2.9a1 1 0 0 1-.8 1.6H5"/></symbol>
+    <symbol id="i-waves" viewBox="0 0 24 24"><path d="M3 9.5c2.2 0 2.8-2 5-2s2.8 2 5 2 2.8-2 5-2 2.8 2 3 2"/><path d="M3 15.5c2.2 0 2.8-2 5-2s2.8 2 5 2 2.8-2 5-2 2.8 2 3 2"/></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polygon points="15.8 8.2 13.7 13.7 8.2 15.8 10.3 10.3 15.8 8.2"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.1-2.5 3.6"/><circle cx="12" cy="17.2" r=".6" fill="currentColor"/></symbol>
+    <symbol id="i-notes" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol>
+    <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 3v3m6-3v3M9 18v3m6-3v3M3 9h3m-3 6h3m12-6h3m-3 6h3"/></symbol>
+    <symbol id="i-team" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0"/><circle cx="16.5" cy="9.5" r="2.3"/><path d="M16.5 14.2a4.5 4.5 0 0 1 4 4.8"/></symbol>
+    <symbol id="i-id-card" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="10.5" r="1.8"/><path d="M6 15.5a2.8 2.8 0 0 1 5 0M14 10h4M14 14h3"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l2.1-2.1a4.5 4.5 0 0 0-6.4-6.4L10.8 6.8"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-2.1 2.1a4.5 4.5 0 0 0 6.4 6.4l1.3-1.3"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 11.5a8 8 0 0 1-8 8c-1.3 0-2.5-.3-3.6-.8L4 20l1.3-4.2A8 8 0 1 1 20 11.5Z"/></symbol>
     <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5m6 6-6-6 6-6"/></symbol>
-    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8.5 11V7.5a3.5 3.5 0 0 1 7 0V11"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15.5-4.5-4.5L9 18.5"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5a7 7 0 0 1 14 0"/></symbol>
   </svg>
 
   <header class="topbar">
@@ -41,10 +47,13 @@
       <a class="brand" href="#" id="brand"><span class="brand-icon"><svg class="icon"><use href="#i-logo"/></svg></span><span>重电校园站</span></a>
       <form class="search" id="search" role="search">
         <svg class="icon"><use href="#i-search"/></svg>
-        <input id="query" type="search" aria-label="搜索校园帖子" placeholder="搜索帖子、课程或关键词" autocomplete="off">
+        <input id="query" type="search" aria-label="搜索校园帖子" placeholder="搜索帖子、课程、跑腿或关键词" autocomplete="off">
         <kbd aria-hidden="true">/</kbd>
       </form>
-      <button class="button primary header-post" data-compose><svg class="icon"><use href="#i-plus"/></svg><span>发布帖子</span></button>
+      <div class="top-actions">
+        <button class="button secondary auth-trigger" id="auth-button" type="button" data-auth><svg class="icon"><use href="#i-user"/></svg><span>校内验证</span></button>
+        <button class="button primary header-post" type="button" data-compose><svg class="icon"><use href="#i-plus"/></svg><span>发布帖子</span></button>
+      </div>
     </div>
   </header>
 
@@ -67,11 +76,18 @@
 
     <main id="main" tabindex="-1">
       <section id="feed-page" aria-labelledby="feed-title">
-        <div class="site-note"><svg class="icon" aria-hidden="true"><use href="#i-compass"/></svg><span>校园问答与经验分享 <span class="note-divider" aria-hidden="true">·</span> <a href="#topic/welcome">发帖指南</a></span><span class="sample-label">演示内容</span></div>
+        <div class="site-note"><svg class="icon" aria-hidden="true"><use href="#i-compass"/></svg><span>校园问答、经验沉淀与互助 <span class="note-divider" aria-hidden="true">·</span> <a href="#topic/welcome">发帖指南</a></span><span class="sample-label">演示原型</span></div>
         <h1 id="feed-title" class="visually-hidden">校园讨论</h1>
         <div class="feed-tools" id="feed-tools">
           <div id="tabs" class="feed-tabs" role="group" aria-label="帖子筛选"></div>
-          <div class="feed-summary"><span id="feed-subtitle" role="status"></span><button class="text-button" id="reset-filters" type="button" hidden>清除筛选</button></div>
+          <div class="feed-summary">
+            <label class="active-toggle" id="active-only-wrap" title="隐藏已完成或已过期的互助帖">
+              <input type="checkbox" id="active-only">
+              <span>仅看有效</span>
+            </label>
+            <span id="feed-subtitle" role="status"></span>
+            <button class="text-button" id="reset-filters" type="button" hidden>清除筛选</button>
+          </div>
         </div>
         <div id="feed" class="feed"></div>
       </section>
@@ -81,16 +97,78 @@
 
   <dialog id="composer" aria-labelledby="composer-title">
     <form id="post-form" class="composer-form">
-      <div class="dialog-head"><div><div class="panel-label">校园讨论</div><h2 id="composer-title">发布帖子</h2></div><button class="icon-button" id="close-composer" type="button" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button></div>
-      <p class="form-note">演示模式。内容保存在当前浏览器，请使用示例信息。</p>
-      <label>标题<input name="title" required maxlength="80" placeholder="一句话说清楚你的问题或经验"></label>
-      <fieldset class="choice-set"><legend>类别</legend><div class="choice-grid" id="post-categories"></div></fieldset>
+      <div class="dialog-head">
+        <div><div class="panel-label">重电校园站</div><h2 id="composer-title">发布帖子</h2></div>
+        <button class="icon-button" id="close-composer" type="button" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button>
+      </div>
+      <p class="form-note">演示模式：内容保存在当前浏览器，图片自动压缩。请勿发布代课、代做作业等违规信息。</p>
+      <label>标题<input name="title" required maxlength="80" placeholder="一句话说清楚你的问题、经验或互助需求"></label>
+      <fieldset class="choice-set"><legend>版块</legend><div class="choice-grid" id="post-categories"></div></fieldset>
       <label>校区<select name="campus" required></select></label>
+
+      <div class="help-fields" id="help-fields" hidden>
+        <div class="help-fields-head">校园互助结构化信息 <span class="choice-hint">便于按时效筛选，结贴后联系方式自动隐藏</span></div>
+        <div class="field-row">
+          <label><span>酬劳 / 价格 <span class="choice-hint">选填</span></span><input name="reward" maxlength="24" placeholder="如：5 元、¥35、AA、请喝奶茶"></label>
+          <label><span>有效期</span><select name="ttl">
+            <option value="2">2 小时内</option>
+            <option value="12" selected>12 小时内</option>
+            <option value="72">3 天内</option>
+            <option value="168">7 天内</option>
+            <option value="0">长期有效</option>
+          </select></label>
+        </div>
+        <label><span>联系方式 <span class="choice-hint">选填 · 仅校内验证登录后可见，结贴自动隐藏</span></span><input name="contact" maxlength="60" placeholder="如：QQ 12345678（备注快递）或微信号"></label>
+      </div>
+
       <fieldset class="choice-set"><legend>标签 <span class="choice-hint">可多选</span></legend><div class="choice-grid tag-choices" id="post-tags"></div></fieldset>
-      <label>正文<textarea name="body" required maxlength="3000" rows="5" placeholder="写写背景、做过的尝试，或值得记下的步骤。"></textarea></label>
+      <label>正文<textarea name="body" required maxlength="3000" rows="5" placeholder="写写背景、具体位置/时间要求，或值得记下的经验步骤。"></textarea></label>
+
+      <div class="upload-block">
+        <div class="upload-head">
+          <span class="upload-label">附图 <span class="choice-hint">最多 4 张，支持 Ctrl+V 粘贴截图</span></span>
+          <label class="button secondary upload-btn"><svg class="icon"><use href="#i-image"/></svg><span>选择图片</span><input type="file" id="image-input" accept="image/*" multiple hidden></label>
+        </div>
+        <div class="upload-previews" id="upload-previews" hidden></div>
+      </div>
+
       <div class="dialog-actions"><button class="button secondary" id="cancel-post" type="button">取消</button><button class="button primary" type="submit">发布帖子</button></div>
     </form>
   </dialog>
+
+  <dialog id="auth-dialog" aria-labelledby="auth-title">
+    <form id="auth-form" class="composer-form">
+      <div class="dialog-head">
+        <div><div class="panel-label">轻校内验证</div><h2 id="auth-title">验证同学身份</h2></div>
+        <button class="icon-button" id="close-auth" type="button" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button>
+      </div>
+      <p class="form-note" id="auth-desc">答对一道重电校内常识题即可发帖、回复和查看互助联系方式（防校外广告）。</p>
+      <div id="auth-fields" class="auth-fields">
+        <label>你的昵称<input name="nickname" required maxlength="16" placeholder="如：小陈、两江小周"></label>
+        <label>常驻校区<select name="campus" required></select></label>
+        <label>
+          <span id="verify-question-label">校内验证题：我们学校的别名是啥？</span>
+          <input name="answer" required maxlength="20" placeholder="请输入答案（提示：三个字）" autocomplete="off">
+        </label>
+        <p class="form-error" id="auth-error" hidden></p>
+      </div>
+      <div id="auth-signed-in" class="auth-signed-in" hidden>
+        <div class="auth-profile" id="auth-profile"></div>
+        <p class="form-note">当前已通过校内验证，可以发帖、回复、结贴并查看互助联系方式。</p>
+      </div>
+      <div class="dialog-actions" id="auth-actions">
+        <button class="button secondary" id="cancel-auth" type="button">取消</button>
+        <button class="button secondary" id="logout-btn" type="button" hidden>退出验证</button>
+        <button class="button primary" id="auth-submit" type="submit">完成验证</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="lightbox" class="lightbox" aria-label="查看大图">
+    <button class="icon-button lightbox-close" id="close-lightbox" type="button" aria-label="关闭大图"><svg class="icon"><use href="#i-close"/></svg></button>
+    <img id="lightbox-img" alt="帖子附图预览">
+  </dialog>
+
   <div class="toast" id="toast" role="status" hidden></div>
 </body>
 </html>
