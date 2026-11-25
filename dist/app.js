@@ -2,7 +2,7 @@
 
 const categories = [
   { id: 'all', name: '全部讨论', icon: 'home' },
-  { id: 'help', name: '校园互助', icon: 'package' },
+  { id: 'help', name: '校园互助', icon: 'assist' },
   { id: 'study', name: '课程与实训', icon: 'book' },
   { id: 'career', name: '实习与竞赛', icon: 'briefcase' },
   { id: 'life', name: '校园生活', icon: 'leaf' },
@@ -17,7 +17,7 @@ const campuses = [
 const tags = [
   { id: 'errand', name: '跑腿代取', icon: 'package' },
   { id: 'market', name: '二手闲置', icon: 'bag' },
-  { id: 'lost', name: '失物招领', icon: 'pin' },
+  { id: 'lost', name: '失物招领', icon: 'key' },
   { id: 'question', name: '求助', icon: 'help' },
   { id: 'notes', name: '经验分享', icon: 'notes' },
   { id: 'project', name: '项目实践', icon: 'chip' },
@@ -222,8 +222,49 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 }
 
+const ICONS = {
+  logo: '<path class="ic-outer" d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3Z"/><path class="ic-core" d="M12 8.5 8.5 10.5v4L12 16.5l3.5-2v-4L12 8.5Z"/><path class="ic-spokes" d="M12 3v5.5M4 7.5l4.5 3M20 7.5l-4.5 3"/>',
+  home: '<path class="ic-fill" d="M5 10.5 12 5l7 5.5V19a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19v-8.5Z"/><path class="ic-body" d="M5 10.5V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-8.5"/><path class="ic-roof" d="M3 11.2 11.4 4.5a1 1 0 0 1 1.2 0L21 11.2"/><path class="ic-door" d="M9.8 20.5v-5.2a2.2 2.2 0 0 1 4.4 0v5.2"/>',
+  assist: '<path class="ic-heart ic-tint" d="M13 11.2S9 8.8 9 6.3a2.2 2.2 0 0 1 4-1.2 2.2 2.2 0 0 1 4 1.2c0 2.5-4 4.9-4 4.9Z"/><g class="ic-hand"><path d="M3 14.5v6"/><path d="M3 16.2h2.8l2-1.2c.5-.3 1.1-.5 1.8-.5H13a1.6 1.6 0 0 1 0 3.2h-2.2"/><path d="M5.8 19.8h8.5c.8 0 1.5-.2 2.1-.7l3.6-2.7a1.5 1.5 0 0 0-1.9-2.3l-2.3 1.6"/></g>',
+  search: '<g class="ic-glass"><circle class="ic-tint" cx="10.8" cy="10.8" r="6.8"/><path d="m20 20-4.2-4.2"/></g>',
+  plus: '<g class="ic-plus"><path d="M12 5v14M5 12h14"/></g>',
+  book: '<path class="ic-left ic-tint" d="M12 6.2A3.6 3.6 0 0 0 8.5 4H4a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 4 19h4.5a3.5 3.5 0 0 1 3.5 2"/><path class="ic-right ic-tint" d="M12 6.2A3.6 3.6 0 0 1 15.5 4H20a1.5 1.5 0 0 1 1.5 1.5v12A1.5 1.5 0 0 1 20 19h-4.5a3.5 3.5 0 0 0-3.5 2"/><path class="ic-spine" d="M12 6.2V21"/>',
+  briefcase: '<g class="ic-brief"><path class="ic-handle" d="M8.5 7V5.4A1.4 1.4 0 0 1 9.9 4h4.2a1.4 1.4 0 0 1 1.4 1.4V7"/><rect class="ic-tint" x="3" y="7" width="18" height="13" rx="2.5"/><path d="M3 12.2c2.8 1.2 5.8 1.8 9 1.8s6.2-.6 9-1.8"/><path class="ic-clasp" d="M12 12.5v2"/></g>',
+  leaf: '<path class="ic-steam-1" d="M8.5 4.2c0 1 .9 1.2.9 2.2"/><path class="ic-steam-2" d="M12.5 3.8c0 1 .9 1.2.9 2.2"/><g class="ic-cup"><path class="ic-tint" d="M4 9h13v6.8A4.2 4.2 0 0 1 12.8 20H8.2A4.2 4.2 0 0 1 4 15.8V9Z"/><path d="M17 10h1.3a3.2 3.2 0 0 1 0 6.4H17"/></g>',
+  megaphone: '<g class="ic-horn"><path class="ic-tint" d="M4.5 10.5 16.5 5.5v13l-12-5Z"/><path d="M4.5 10.5H3.2a1.2 1.2 0 0 0-1.2 1.2v.6a1.2 1.2 0 0 0 1.2 1.2h1.3"/><path d="M7.5 14.5 9 19a1.1 1.1 0 0 0 1.1.7h.8a1 1 0 0 0 1-1.2l-.7-3"/></g><path class="ic-wave-1" d="M19.3 9.5a4.5 4.5 0 0 1 0 5"/><path class="ic-wave-2" d="M21.5 7.5a7.5 7.5 0 0 1 0 9"/>',
+  package: '<g class="ic-lid"><path class="ic-tint" d="M12 3 4 7.3l8 4.4 8-4.4L12 3Z"/><path d="M8.2 5.1 16 9.4"/></g><path class="ic-box" d="M4 7.3v9.4L12 21l8-4.3V7.3M12 11.7V21"/>',
+  bag: '<g class="ic-bag"><path class="ic-tint" d="M5.5 8.5h13l1.1 10.3a2 2 0 0 1-2 2.2H6.4a2 2 0 0 1-2-2.2l1.1-10.3Z"/><path d="M9 8.5V6.5a3 3 0 0 1 6 0v2"/></g>',
+  key: '<g class="ic-key"><circle class="ic-tint" cx="8" cy="14.5" r="4"/><path d="m11 11.5 8.5-8.5"/><path d="m16.5 6 2.5 2.5M14 8.5l2 2"/></g>',
+  pin: '<g class="ic-pin"><path class="ic-tint" d="M12 21s-6.5-5.6-6.5-10.8a6.5 6.5 0 1 1 13 0C18.5 15.4 12 21 12 21Z"/><circle class="ic-dot" cx="12" cy="10.2" r="2.3"/></g>',
+  thumbtack: '<g class="ic-tack"><path d="M12 17v5"/><path class="ic-tint" d="M9 10.8V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v5.8l2.2 2.2a1 1 0 0 1-.7 1.7H7.5a1 1 0 0 1-.7-1.7L9 10.8Z"/></g>',
+  map: '<g class="ic-map"><path class="ic-tint" d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20V6.5Z"/><path d="M9 4v13.5M15 6.5V20"/></g>',
+  flag: '<path d="M5 21V4"/><path class="ic-cloth ic-tint" d="M5 4.8h12.2a.9.9 0 0 1 .7 1.5l-2.3 3 2.3 3a.9.9 0 0 1-.7 1.5H5"/>',
+  waves: '<path class="ic-wave-top" d="M3 9c2.2 0 2.8-2 5-2s2.8 2 5 2 2.8-2 5-2 2.6 1.6 3 2"/><path class="ic-wave-bot" d="M3 15.5c2.2 0 2.8-2 5-2s2.8 2 5 2 2.8-2 5-2 2.6 1.6 3 2"/>',
+  compass: '<circle class="ic-tint" cx="12" cy="12" r="9"/><polygon class="ic-needle" points="15.8 8.2 13.7 13.7 8.2 15.8 10.3 10.3 15.8 8.2"/>',
+  help: '<circle class="ic-tint" cx="12" cy="12" r="9"/><g class="ic-q"><path d="M9.4 9.2a2.7 2.7 0 0 1 5.1 1c0 1.7-2.5 2.1-2.5 3.5"/><circle cx="12" cy="17.2" r=".7" fill="currentColor" stroke="none"/></g>',
+  notes: '<g class="ic-doc"><rect class="ic-tint" x="4" y="3" width="16" height="18" rx="2.5"/><path class="ic-line-1" d="M8 8h8"/><path class="ic-line-2" d="M8 12h8"/><path class="ic-line-3" d="M8 16h5"/></g>',
+  chip: '<rect class="ic-tint" x="6" y="6" width="12" height="12" rx="2.5"/><rect class="ic-core" x="9.5" y="9.5" width="5" height="5" rx="1"/><path class="ic-pins" d="M9 3v3m6-3v3M9 18v3m6-3v3M3 9h3m-3 6h3m12-6h3m-3 6h3"/>',
+  team: '<g class="ic-p1"><circle class="ic-tint" cx="9" cy="8.5" r="3"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0"/></g><g class="ic-p2"><circle cx="16.5" cy="9.5" r="2.2"/><path d="M16.5 14.3a4.3 4.3 0 0 1 4 4.7"/></g>',
+  'id-card': '<g class="ic-card"><rect class="ic-tint" x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="10.5" r="1.8"/><path d="M5.8 15.5a2.8 2.8 0 0 1 5.4 0"/><path class="ic-line-1" d="M14 10h4"/><path class="ic-line-2" d="M14 14h3"/></g>',
+  chat: '<path class="ic-bubble ic-tint" d="M20 11.5a8 8 0 0 1-8 8c-1.3 0-2.5-.3-3.6-.8L4 20l1.3-4.2A8 8 0 1 1 20 11.5Z"/>',
+  back: '<g class="ic-arrow"><path d="M19 12H5"/><path d="m11 18-6-6 6-6"/></g>',
+  check: '<path class="ic-check" d="m5 12.5 4.5 4.5L19 7.5"/>',
+  close: '<g class="ic-x"><path d="m6 6 12 12M18 6 6 18"/></g>',
+  clock: '<circle class="ic-tint" cx="12" cy="12" r="9"/><path class="ic-hand-min" d="M12 7.5V12l3 2"/>',
+  lock: '<path class="ic-shackle" d="M8.5 11V7.5a3.5 3.5 0 0 1 7 0V11"/><rect class="ic-tint" x="5" y="11" width="14" height="10" rx="2.5"/>',
+  image: '<rect class="ic-tint" x="3" y="5" width="18" height="14" rx="2.5"/><circle class="ic-sun" cx="8.5" cy="10" r="1.5"/><path class="ic-mtn" d="m21 15.5-4.5-4.5L9 18.5"/>',
+  user: '<circle class="ic-head ic-tint" cx="12" cy="8.2" r="3.4"/><path class="ic-shoulders" d="M5 19.5a7 7 0 0 1 14 0"/>',
+  trash: '<g class="ic-lid"><path d="M4 7h16"/><path d="M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/></g><path d="M6 7l1 13a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 17 20l1-13M10 11v6M14 11v6"/>',
+  bell: '<g class="ic-bell-body"><path class="ic-tint" d="M18 8.5a6 6 0 0 0-12 0c0 6-2.5 7.5-2.5 7.5h17S18 14.5 18 8.5Z"/></g><path class="ic-clapper" d="M10.3 19.5a2 2 0 0 0 3.4 0"/>',
+  heart: '<path class="ic-heart-shape" d="M12 20.2s-7.5-4.6-8.8-9.5A4.8 4.8 0 0 1 12 6.8a4.8 4.8 0 0 1 8.8 3.9c-1.3 4.9-8.8 9.5-8.8 9.5Z"/>',
+  edit: '<path class="ic-base" d="M12 20h9"/><path class="ic-pen" d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  alert: '<path class="ic-tint" d="M12 3.2 2.6 19.5h18.8L12 3.2Z"/><g class="ic-bang"><path d="M12 9.5v4.5"/><circle cx="12" cy="17" r=".7" fill="currentColor" stroke="none"/></g>',
+  eye: '<path class="ic-lid" d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z"/><circle class="ic-pupil" cx="12" cy="12" r="2.8"/><path class="ic-slash" d="M4 4l16 16"/>',
+};
+
 function icon(name) {
-  return `<svg class="icon" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+  const safe = ICONS[name] ? name : 'compass';
+  return `<svg class="icon icon-${safe}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[safe]}</svg>`;
 }
 
 function avatar(person, extraClass = '') {
@@ -614,8 +655,6 @@ function syncChangePasswordLiveValidation() {
 function setEyeIcon(btn, showing) {
   btn.setAttribute('aria-pressed', showing ? 'true' : 'false');
   btn.setAttribute('aria-label', showing ? '隐藏密码' : '显示密码');
-  const useEl = btn.querySelector('use');
-  if (useEl) useEl.setAttribute('href', showing ? '#i-eye-off' : '#i-eye');
 }
 
 function resetPasswordVisibility(root = document) {
