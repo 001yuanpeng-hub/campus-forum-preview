@@ -230,9 +230,9 @@ dialog::backdrop { background: #00000038; }
 .pwd-wrap { position: relative; display: flex; align-items: center; }
 .pwd-wrap input { padding-right: 38px; }
 .pwd-wrap input::-ms-reveal, .pwd-wrap input::-ms-clear { display: none; }
-.pwd-eye { position: absolute; right: 4px; width: 30px; height: 30px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); display: grid; place-items: center; padding: 0; }
+.pwd-eye { position: absolute; right: 4px; width: 30px; height: 30px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); display: grid; place-items: center; padding: 0; user-select: none; -webkit-user-select: none; }
 .pwd-eye:hover { background: var(--soft); color: var(--accent-dark); }
-.pwd-eye .icon { width: 16px; height: 16px; }
+.pwd-eye .icon { width: 16px; height: 16px; pointer-events: none; }
 .choice-set { min-width: 0; margin: 0; padding: 0; border: 0; }
 .choice-set legend { margin-bottom: 6px; padding: 0; font-weight: 600; font-size: 14px; }
 .choice-hint { color: var(--muted); font-size: 12px; font-weight: 400; }
@@ -308,9 +308,17 @@ textarea { resize: vertical; }
 .verify-card label { font-size: 13px; font-weight: 600; color: var(--accent-dark); }
 
 .auth-submit-row { margin-top: 2px; }
-.auth-submit-btn { width: 100%; min-height: 42px; border-radius: 9px; font-size: 15px; font-weight: 600; letter-spacing: .02em; }
-.auth-switch-foot { text-align: center; font-size: 13px; color: var(--muted); margin-top: -2px; }
+.auth-submit-btn { width: 100%; min-height: 42px; border-radius: 9px; font-size: 15px; font-weight: 600; letter-spacing: .02em; user-select: none; -webkit-user-select: none; }
+.auth-switch-foot { text-align: center; font-size: 13px; color: var(--muted); margin-top: -2px; user-select: none; -webkit-user-select: none; }
 .auth-switch-link { font-size: 13px; font-weight: 600; color: var(--accent-dark); padding: 2px 4px; }
+.forgot-link { font-size: 12px; font-weight: 500; padding: 0; user-select: none; }
+
+.captcha-row, .code-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.captcha-btn { padding: 0; border: 1px solid #d9cfe0; border-radius: 8px; overflow: hidden; background: #f7f1f8; height: 40px; width: 120px; display: grid; place-items: center; user-select: none; }
+.captcha-btn:hover { border-color: var(--accent-border); }
+.captcha-btn img { display: block; width: 120px; height: 40px; pointer-events: none; }
+.code-send-btn { height: 40px; min-width: 112px; border-radius: 8px; font-size: 13px; padding: 0 12px; }
+.auth-shell .form-error, .auth-tabs, .pwd-rules { user-select: none; -webkit-user-select: none; }
 
 .pwd-change-card { padding: 12px 14px; border-radius: 10px; }
 .pwd-change-form { display: grid; gap: 11px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }

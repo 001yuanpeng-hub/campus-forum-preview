@@ -169,8 +169,10 @@ const shortDate = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' });
 const filters = { category: 'all', campus: 'all', tag: 'all', tab: 'latest', query: '', activeOnly: false };
 
 let isServerMode = false;
+let emailVerifyEnabled = false;
 let currentUser = null;
 let currentVerifyQuestion = demoVerifyQuestions[0];
+let currentCaptchaId = '';
 let authTab = 'register';
 let editingTopicId = null;
 let reportingTopicId = null;
@@ -178,6 +180,11 @@ let pendingImages = [];
 let afterAuthAction = null;
 let toastTimer;
 let searchDebounce;
+let emailCheckTimer;
+let nickCheckTimer;
+let codeCooldownTimer;
+let codeCooldownLeft = 0;
+let availabilityState = { email: null, nickname: null };
 
 function loadDemo() {
   try {
@@ -457,41 +464,143 @@ function updateLivePasswordUI({ input, confirmInput, rulesEl, msgEl, confirmMsgE
   }
 }
 
-function updateLiveUsernameUI() {
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+async function refreshCaptcha() {
+  if (!isServerMode) return;
+  try {
+    const data = await api('/api/captcha');
+    currentCaptchaId = data.captchaId;
+    $('#captcha-img').src = data.image;
+    authForm.elements.captchaCode.value = '';
+  } catch { /* ignore */ }
+}
+
+function startCodeCooldown(seconds = 60) {
+  clearInterval(codeCooldownTimer);
+  codeCooldownLeft = seconds;
+  const btn = $('#send-code-btn');
+  const tick = () => {
+    if (codeCooldownLeft <= 0) {
+      clearInterval(codeCooldownTimer);
+      btn.disabled = false;
+      btn.textContent = '发送验证码';
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = `${codeCooldownLeft}s 后重发`;
+    codeCooldownLeft -= 1;
+  };
+  tick();
+  codeCooldownTimer = setInterval(tick, 1000);
+}
+
+function updateLiveEmailUI() {
   const input = authForm.elements.username;
   const msg = $('#reg-username-msg');
+  clearTimeout(emailCheckTimer);
   if (!isServerMode || authTab === 'login') {
+    availabilityState.email = null;
+    input.classList.remove('is-invalid', 'is-valid');
+    msg.hidden = true;
+    return;
+  }
+  const val = input.value.trim().toLowerCase();
+  if (!val) {
+    availabilityState.email = null;
+    input.classList.remove('is-invalid', 'is-valid');
+    msg.hidden = true;
+    return;
+  }
+  if (!EMAIL_RE.test(val) || val.length > 80) {
+    availabilityState.email = false;
+    input.classList.add('is-invalid');
+    input.classList.remove('is-valid');
+    msg.textContent = '请输入有效的邮箱地址（如 name@qq.com）。';
+    msg.className = 'field-feedback is-error';
+    msg.hidden = false;
+    return;
+  }
+  if (authTab === 'reset') {
+    availabilityState.email = true;
+    input.classList.remove('is-invalid');
+    input.classList.add('is-valid');
+    msg.hidden = true;
+    return;
+  }
+  input.classList.remove('is-invalid');
+  emailCheckTimer = setTimeout(async () => {
+    try {
+      const data = await api(`/api/auth/check-availability?email=${encodeURIComponent(val)}`);
+      if (authForm.elements.username.value.trim().toLowerCase() !== val || authTab !== 'register') return;
+      availabilityState.email = Boolean(data.emailAvailable);
+      if (data.emailAvailable) {
+        input.classList.remove('is-invalid');
+        input.classList.add('is-valid');
+        msg.textContent = '✓ 该邮箱可以注册';
+        msg.className = 'field-feedback is-ok';
+        msg.hidden = false;
+      } else {
+        input.classList.add('is-invalid');
+        input.classList.remove('is-valid');
+        msg.textContent = '该邮箱已被注册，可直接登录。';
+        msg.className = 'field-feedback is-error';
+        msg.hidden = false;
+      }
+    } catch { /* ignore */ }
+  }, 280);
+}
+
+function updateLiveNicknameUI() {
+  const input = authForm.elements.nickname;
+  const msg = $('#reg-nickname-msg');
+  clearTimeout(nickCheckTimer);
+  if (!isServerMode || authTab !== 'register') {
+    availabilityState.nickname = null;
     input.classList.remove('is-invalid', 'is-valid');
     msg.hidden = true;
     return;
   }
   const val = input.value.trim();
   if (!val) {
+    availabilityState.nickname = null;
     input.classList.remove('is-invalid', 'is-valid');
     msg.hidden = true;
     return;
   }
-  const ok = /^[a-zA-Z0-9_]{3,20}$/.test(val);
-  input.classList.toggle('is-valid', ok);
-  input.classList.toggle('is-invalid', !ok);
-  if (!ok) {
-    msg.textContent = '账号需为 3–20 位字母、数字或下划线。';
-    msg.className = 'field-feedback is-error';
-    msg.hidden = false;
-  } else {
-    msg.hidden = true;
-  }
+  input.classList.remove('is-invalid');
+  nickCheckTimer = setTimeout(async () => {
+    try {
+      const data = await api(`/api/auth/check-availability?nickname=${encodeURIComponent(val)}`);
+      if (authForm.elements.nickname.value.trim() !== val || authTab !== 'register') return;
+      availabilityState.nickname = Boolean(data.nicknameAvailable);
+      if (data.nicknameAvailable) {
+        input.classList.remove('is-invalid');
+        input.classList.add('is-valid');
+        msg.textContent = '✓ 昵称可用';
+        msg.className = 'field-feedback is-ok';
+        msg.hidden = false;
+      } else {
+        input.classList.add('is-invalid');
+        input.classList.remove('is-valid');
+        msg.textContent = '该昵称已被使用，请换一个。';
+        msg.className = 'field-feedback is-error';
+        msg.hidden = false;
+      }
+    } catch { /* ignore */ }
+  }, 280);
 }
 
 function syncRegisterLiveValidation() {
-  updateLiveUsernameUI();
+  updateLiveEmailUI();
+  updateLiveNicknameUI();
   updateLivePasswordUI({
     input: authForm.elements.password,
     confirmInput: authForm.elements.confirmPassword,
     rulesEl: $('#reg-pwd-rules'),
     msgEl: $('#reg-pwd-msg'),
     confirmMsgEl: $('#reg-confirm-msg'),
-    active: isServerMode && authTab !== 'login',
+    active: isServerMode && (authTab === 'register' || authTab === 'reset'),
   });
 }
 
@@ -507,45 +616,60 @@ function syncChangePasswordLiveValidation() {
   });
 }
 
+function setEyeIcon(btn, showing) {
+  btn.setAttribute('aria-pressed', showing ? 'true' : 'false');
+  btn.setAttribute('aria-label', showing ? '隐藏密码' : '显示密码');
+  const useEl = btn.querySelector('use');
+  if (useEl) useEl.setAttribute('href', showing ? '#i-eye-off' : '#i-eye');
+}
+
 function resetPasswordVisibility(root = document) {
   root.querySelectorAll('.pwd-wrap').forEach((wrap) => {
     const input = wrap.querySelector('input');
     const btn = wrap.querySelector('[data-toggle-pwd]');
     if (input) input.type = 'password';
-    if (btn) {
-      btn.setAttribute('aria-pressed', 'false');
-      btn.setAttribute('aria-label', '显示密码');
-      btn.innerHTML = icon('eye');
-    }
+    if (btn) setEyeIcon(btn, false);
   });
 }
 
 function syncAuthTabUI() {
+  const isLogin = isServerMode && authTab === 'login';
+  const isReset = isServerMode && authTab === 'reset';
+  const isRegister = !isLogin && !isReset;
+
   const tabsWrap = $('#auth-mode-tabs');
-  tabsWrap.hidden = !isServerMode || Boolean(currentUser);
+  tabsWrap.hidden = !isServerMode || Boolean(currentUser) || isReset;
   tabsWrap.querySelectorAll('[data-auth-tab]').forEach((btn) => {
     btn.setAttribute('aria-selected', btn.dataset.authTab === authTab ? 'true' : 'false');
   });
 
-  const isLogin = isServerMode && authTab === 'login';
   $('#field-username').hidden = !isServerMode;
+  $('#field-identity-row').hidden = isLogin || isReset;
+  $('#field-captcha').hidden = !isServerMode || isLogin;
+  $('#field-email-code').hidden = !isServerMode || !emailVerifyEnabled || isLogin;
   $('#field-password').hidden = !isServerMode;
   $('#field-confirm-password').hidden = !isServerMode || isLogin;
-  $('#field-identity-row').hidden = isLogin;
-  $('#field-verify').hidden = isLogin;
+  $('#field-verify').hidden = isLogin || isReset;
+  $('#forgot-pwd-btn').hidden = !isServerMode || !emailVerifyEnabled || !isLogin;
   $('#auth-switch-foot').hidden = !isServerMode;
 
-  authForm.elements.username.required = isServerMode;
-  authForm.elements.password.required = isServerMode;
-  authForm.elements.confirmPassword.required = isServerMode && !isLogin;
-  authForm.elements.nickname.required = !isLogin;
-  authForm.elements.campus.required = !isLogin;
-  authForm.elements.answer.required = !isLogin;
+  authForm.elements.username.type = isLogin ? 'text' : 'email';
+  authForm.elements.username.autocomplete = isLogin ? 'username' : 'email';
+  authForm.elements.username.placeholder = isLogin ? '输入注册邮箱或管理员账号' : '如：example@qq.com';
+  $('#auth-username-label').textContent = isLogin ? '邮箱 / 账号' : '邮箱';
+  $('#auth-username-hint').textContent = isLogin ? '' : (isReset ? '输入注册时绑定的邮箱' : '作为登录账号');
 
   authForm.elements.password.autocomplete = isLogin ? 'current-password' : 'new-password';
   authForm.elements.password.placeholder = isLogin ? '输入登录密码' : '至少 8 位，含字母、数字和符号';
+  $('#auth-password-label').textContent = isReset ? '新密码' : '密码';
+  $('#auth-confirm-label').textContent = isReset ? '确认新密码' : '确认密码';
+
   resetPasswordVisibility(authDialog);
   syncRegisterLiveValidation();
+
+  if (isServerMode && (isRegister || isReset)) {
+    refreshCaptcha();
+  }
 
   if (!isServerMode) {
     $('#auth-title').textContent = '验证同学身份';
@@ -558,9 +682,16 @@ function syncAuthTabUI() {
     $('#auth-switch-text').textContent = '还没有账号？';
     $('#auth-switch-btn').textContent = '立即注册';
     $('#auth-switch-btn').dataset.authTab = 'register';
+  } else if (isReset) {
+    $('#auth-title').textContent = '重置密码';
+    $('#auth-panel-label').textContent = '通过注册邮箱验证身份';
+    $('#auth-submit').textContent = '重置密码';
+    $('#auth-switch-text').textContent = '想起密码了？';
+    $('#auth-switch-btn').textContent = '返回登录';
+    $('#auth-switch-btn').dataset.authTab = 'login';
   } else {
     $('#auth-title').textContent = '创建账号';
-    $('#auth-panel-label').textContent = '重电校园站 · 轻校内验证';
+    $('#auth-panel-label').textContent = emailVerifyEnabled ? '重电校园站 · 邮箱与校内验证' : '重电校园站 · 人机与校内验证';
     $('#auth-submit').textContent = '注册';
     $('#auth-switch-text').textContent = '已有账号？';
     $('#auth-switch-btn').textContent = '立即登录';
@@ -609,7 +740,7 @@ async function openAuthDialog(onSuccess = null, preferredTab = 'register') {
     $('#auth-title').textContent = '当前登录状态';
     const roleTag = currentUser.role === 'admin' ? '<span class="role-tag">管理员</span>' : '';
     const sub = isServerMode
-      ? `@${escapeHtml(currentUser.username)} · ${escapeHtml(currentUser.campus)}校区`
+      ? `${escapeHtml(currentUser.email || `@${currentUser.username}`)} · ${escapeHtml(currentUser.campus)}校区`
       : `${escapeHtml(currentUser.campus)}校区 · 本地演示验证`;
     const profileBtn = isServerMode && currentUser.id
       ? `<a class="button secondary small" href="#user/${currentUser.id}" data-close-auth>我的主页</a>`
@@ -1248,6 +1379,13 @@ feed.addEventListener('click', (event) => {
   if (title) location.hash = title.hash;
 });
 
+// 阻止按小眼睛时触发文本选中或移走焦点（彻底避免下方“登录”或错误提示被误高亮）
+document.addEventListener('mousedown', (event) => {
+  if (event.target.closest('[data-toggle-pwd]')) {
+    event.preventDefault();
+  }
+});
+
 document.addEventListener('click', async (event) => {
   const filter = event.target.closest('[data-filter]');
   if (filter) {
@@ -1276,14 +1414,19 @@ document.addEventListener('click', async (event) => {
 
   const eyeBtn = event.target.closest('[data-toggle-pwd]');
   if (eyeBtn) {
+    event.preventDefault();
     const input = eyeBtn.closest('.pwd-wrap')?.querySelector('input');
     if (input) {
-      const showing = input.type === 'text';
-      input.type = showing ? 'password' : 'text';
-      eyeBtn.setAttribute('aria-pressed', showing ? 'false' : 'true');
-      eyeBtn.setAttribute('aria-label', showing ? '显示密码' : '隐藏密码');
-      eyeBtn.innerHTML = icon(showing ? 'eye' : 'eye-off');
-      input.focus();
+      const nextShow = input.type !== 'text';
+      const selStart = input.selectionStart;
+      const selEnd = input.selectionEnd;
+      input.type = nextShow ? 'text' : 'password';
+      setEyeIcon(eyeBtn, nextShow);
+      input.focus({ preventScroll: true });
+      if (selStart !== null && selEnd !== null) {
+        try { input.setSelectionRange(selStart, selEnd); } catch { /* ignore */ }
+      }
+      window.getSelection()?.removeAllRanges();
     }
   }
 
@@ -1412,11 +1555,53 @@ $('#cancel-post').addEventListener('click', () => composer.close());
 $('#close-auth').addEventListener('click', () => authDialog.close());
 $('#close-signed-auth').addEventListener('click', () => authDialog.close());
 
-authForm.elements.username.addEventListener('input', updateLiveUsernameUI);
+authForm.elements.username.addEventListener('input', updateLiveEmailUI);
+authForm.elements.nickname.addEventListener('input', updateLiveNicknameUI);
 authForm.elements.password.addEventListener('input', syncRegisterLiveValidation);
 authForm.elements.confirmPassword.addEventListener('input', syncRegisterLiveValidation);
 $('#change-password-form').elements.newPassword.addEventListener('input', syncChangePasswordLiveValidation);
 $('#change-password-form').elements.confirmNewPassword.addEventListener('input', syncChangePasswordLiveValidation);
+$('#refresh-captcha-btn').addEventListener('click', refreshCaptcha);
+
+$('#send-code-btn').addEventListener('click', async () => {
+  const err = $('#auth-error');
+  err.hidden = true;
+  const email = authForm.elements.username.value.trim().toLowerCase();
+  const captchaCode = authForm.elements.captchaCode.value.trim();
+  if (!EMAIL_RE.test(email)) {
+    updateLiveEmailUI();
+    err.textContent = '请先输入有效的邮箱地址。';
+    err.hidden = false;
+    authForm.elements.username.focus();
+    return;
+  }
+  if (!captchaCode) {
+    err.textContent = '请先输入人机图形验证码，再获取邮箱验证码。';
+    err.hidden = false;
+    authForm.elements.captchaCode.focus();
+    return;
+  }
+  const btn = $('#send-code-btn');
+  btn.disabled = true;
+  btn.textContent = '发送中...';
+  try {
+    const purpose = authTab === 'reset' ? 'reset' : 'register';
+    const res = await api('/api/auth/send-code', {
+      method: 'POST',
+      body: JSON.stringify({ email, purpose, captchaId: currentCaptchaId, captchaCode }),
+    });
+    startCodeCooldown(res.cooldown || 60);
+    refreshCaptcha();
+    showToast('验证码已发送到你的邮箱，10 分钟内有效（若未收到请查看垃圾箱）');
+    authForm.elements.emailCode.focus();
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '发送验证码';
+    err.textContent = e.message;
+    err.hidden = false;
+    refreshCaptcha();
+  }
+});
 $('#close-lightbox').addEventListener('click', () => lightbox.close());
 lightbox.addEventListener('click', (event) => {
   if (event.target === lightbox) lightbox.close();
@@ -1498,21 +1683,62 @@ authForm.addEventListener('submit', async (event) => {
   const submitBtn = $('#auth-submit');
 
   if (isServerMode) {
-    const username = authForm.elements.username.value.trim();
+    const identifier = authForm.elements.username.value.trim();
     const password = authForm.elements.password.value;
+
     if (authTab === 'login') {
-      if (!username || !password) {
-        err.textContent = '请输入账号和密码。';
+      if (!identifier || !password) {
+        err.textContent = '请输入邮箱/账号和密码。';
         err.hidden = false;
         return;
       }
+    } else if (authTab === 'reset') {
+      const email = identifier.toLowerCase();
+      const emailCode = authForm.elements.emailCode.value.trim();
+      const confirmPassword = authForm.elements.confirmPassword.value;
+      if (!EMAIL_RE.test(email)) {
+        err.textContent = '请输入有效的注册邮箱。';
+        err.hidden = false;
+        authForm.elements.username.focus();
+        return;
+      }
+      if (!/^\d{6}$/.test(emailCode)) {
+        err.textContent = '请输入 6 位数字邮箱验证码。';
+        err.hidden = false;
+        authForm.elements.emailCode.focus();
+        return;
+      }
+      const pwdErr = validatePasswordStrength(password);
+      if (pwdErr) {
+        syncRegisterLiveValidation();
+        err.textContent = pwdErr;
+        err.hidden = false;
+        authForm.elements.password.focus();
+        return;
+      }
+      if (password !== confirmPassword) {
+        syncRegisterLiveValidation();
+        err.textContent = '两次输入的新密码不一致，请重新确认。';
+        err.hidden = false;
+        authForm.elements.confirmPassword.focus();
+        return;
+      }
     } else {
+      const email = identifier.toLowerCase();
       const confirmPassword = authForm.elements.confirmPassword.value;
       const nickname = authForm.elements.nickname.value.trim();
+      const captchaCode = authForm.elements.captchaCode.value.trim();
+      const emailCode = authForm.elements.emailCode.value.trim();
       const answer = authForm.elements.answer.value.trim();
-      if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-        updateLiveUsernameUI();
-        err.textContent = '账号需为 3–20 位字母、数字或下划线。';
+      if (!EMAIL_RE.test(email)) {
+        updateLiveEmailUI();
+        err.textContent = '请输入有效的邮箱地址作为账号。';
+        err.hidden = false;
+        authForm.elements.username.focus();
+        return;
+      }
+      if (availabilityState.email === false) {
+        err.textContent = '该邮箱已被注册，请直接登录。';
         err.hidden = false;
         authForm.elements.username.focus();
         return;
@@ -1521,6 +1747,25 @@ authForm.addEventListener('submit', async (event) => {
         err.textContent = '请填写一个昵称。';
         err.hidden = false;
         authForm.elements.nickname.focus();
+        return;
+      }
+      if (availabilityState.nickname === false) {
+        err.textContent = '该昵称已被其他同学使用，请换一个昵称。';
+        err.hidden = false;
+        authForm.elements.nickname.focus();
+        return;
+      }
+      if (emailVerifyEnabled) {
+        if (!/^\d{6}$/.test(emailCode)) {
+          err.textContent = '请先获取并输入 6 位邮箱验证码。';
+          err.hidden = false;
+          authForm.elements.emailCode.focus();
+          return;
+        }
+      } else if (!captchaCode) {
+        err.textContent = '请输入右侧图形验证码。';
+        err.hidden = false;
+        authForm.elements.captchaCode.focus();
         return;
       }
       const pwdErr = validatePasswordStrength(password);
@@ -1545,21 +1790,43 @@ authForm.addEventListener('submit', async (event) => {
         return;
       }
     }
+
     submitBtn.disabled = true;
     try {
+      if (authTab === 'reset') {
+        await api('/api/auth/reset-password', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: identifier.toLowerCase(),
+            emailCode: authForm.elements.emailCode.value.trim(),
+            newPassword: password,
+            confirmNewPassword: authForm.elements.confirmPassword.value,
+          }),
+        });
+        showToast('密码重置成功，请使用新密码登录');
+        authTab = 'login';
+        authForm.elements.password.value = '';
+        authForm.elements.confirmPassword.value = '';
+        syncAuthTabUI();
+        return;
+      }
+
       const data = authTab === 'login'
         ? await api('/api/auth/login', {
             method: 'POST',
-            body: JSON.stringify({ username: authForm.elements.username.value.trim(), password: authForm.elements.password.value }),
+            body: JSON.stringify({ email: identifier, password }),
           })
         : await api('/api/auth/register', {
             method: 'POST',
             body: JSON.stringify({
-              username: authForm.elements.username.value.trim(),
-              password: authForm.elements.password.value,
+              email: identifier.toLowerCase(),
+              password,
               confirmPassword: authForm.elements.confirmPassword.value,
               nickname: authForm.elements.nickname.value.trim(),
               campus: authForm.elements.campus.value,
+              captchaId: currentCaptchaId,
+              captchaCode: authForm.elements.captchaCode.value.trim(),
+              emailCode: authForm.elements.emailCode.value.trim(),
               questionId: currentVerifyQuestion?.id,
               answer: authForm.elements.answer.value.trim(),
             }),
@@ -1576,6 +1843,7 @@ authForm.addEventListener('submit', async (event) => {
     } catch (e) {
       err.textContent = e.message;
       err.hidden = false;
+      if (authTab !== 'login') refreshCaptcha();
     } finally {
       submitBtn.disabled = false;
     }
@@ -1706,6 +1974,7 @@ async function boot() {
       const data = await api('/api/bootstrap');
       if (data.mode === 'server') {
         isServerMode = true;
+        emailVerifyEnabled = Boolean(data.emailVerifyEnabled);
         currentUser = data.user || null;
         if (data.verifyQuestion) currentVerifyQuestion = data.verifyQuestion;
         updateNotifBadge(data.unreadCount);

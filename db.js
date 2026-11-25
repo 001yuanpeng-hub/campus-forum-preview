@@ -40,11 +40,23 @@ function initDb() {
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      email TEXT COLLATE NOCASE,
       nickname TEXT NOT NULL,
       campus TEXT NOT NULL DEFAULT '大学城',
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'user',
       color TEXT NOT NULL DEFAULT 'violet',
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS email_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL COLLATE NOCASE,
+      purpose TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      used_at INTEGER,
       created_at INTEGER NOT NULL
     );
 
@@ -138,10 +150,16 @@ function initDb() {
     CREATE INDEX IF NOT EXISTS idx_likes_target ON likes(target_type, target_id);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_email_codes_lookup ON email_codes(email, purpose, created_at DESC);
   `);
 
-  // Safe migration for existing SQLite databases created before Phase 2.5
+  // Safe migrations for existing SQLite databases
   ensureColumn(db, 'topics', 'updated_at', 'INTEGER');
+  ensureColumn(db, 'users', 'email', 'TEXT');
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email COLLATE NOCASE) WHERE email IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_users_nickname_nocase ON users(nickname COLLATE NOCASE);
+  `);
 
   seedInitialData(db);
   return db;

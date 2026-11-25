@@ -6,6 +6,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { URL } = require('node:url');
 const { initDb, hashPassword, verifyPassword } = require('./db');
+const { isMailerConfigured, sendVerificationEmail } = require('./mailer');
 
 function loadDotEnv() {
   const envPath = path.join(__dirname, '.env');
@@ -56,6 +57,104 @@ function checkContentCompliance(...texts) {
       return '内容触发社区规范拦截（严禁发布代课、代做作业、刷网课、替考或违规广告），请修改后再提交。';
     }
   }
+  return null;
+}
+
+// 邮箱格式校验
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+function normalizeEmail(raw) {
+  return String(raw || '').trim().toLowerCase();
+}
+
+// 零依赖 SVG 人机图形验证码（5 分钟有效、单次消费）
+const CAPTCHA_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const captchaStore = new Map();
+
+function createSvgCaptcha() {
+  const now = Date.now();
+  if (captchaStore.size > 500) {
+    for (const [k, v] of captchaStore.entries()) {
+      if (v.expiresAt < now) captchaStore.delete(k);
+    }
+  }
+  let code = '';
+  for (let i = 0; i < 4; i++) {
+    code += CAPTCHA_CHARS[crypto.randomInt(0, CAPTCHA_CHARS.length)];
+  }
+  const id = crypto.randomBytes(12).toString('hex');
+  captchaStore.set(id, { answer: code.toLowerCase(), expiresAt: now + 5 * 60 * 1000 });
+
+  const palette = ['#6b166b', '#801c80', '#3558b8', '#9a4718', '#19694b', '#8c2d62'];
+  const lines = Array.from({ length: 4 }, () => {
+    const x1 = crypto.randomInt(0, 25);
+    const y1 = crypto.randomInt(5, 36);
+    const cx = crypto.randomInt(35, 85);
+    const cy = crypto.randomInt(2, 38);
+    const x2 = crypto.randomInt(95, 120);
+    const y2 = crypto.randomInt(5, 36);
+    const color = palette[crypto.randomInt(0, palette.length)];
+    return `<path d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}" fill="none" stroke="${color}" stroke-opacity="0.28" stroke-width="1.4"/>`;
+  }).join('');
+
+  const dots = Array.from({ length: 18 }, () => {
+    const cx = crypto.randomInt(4, 116);
+    const cy = crypto.randomInt(4, 36);
+    const color = palette[crypto.randomInt(0, palette.length)];
+    return `<circle cx="${cx}" cy="${cy}" r="1.1" fill="${color}" fill-opacity="0.32"/>`;
+  }).join('');
+
+  const letters = code.split('').map((ch, idx) => {
+    const x = 18 + idx * 25 + crypto.randomInt(-3, 4);
+    const y = 27 + crypto.randomInt(-4, 4);
+    const rot = crypto.randomInt(-22, 23);
+    const color = palette[crypto.randomInt(0, palette.length)];
+    return `<text x="${x}" y="${y}" fill="${color}" font-family="Verdana,Arial,sans-serif" font-size="22" font-weight="700" transform="rotate(${rot} ${x} ${y})">${ch}</text>`;
+  }).join('');
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40" viewBox="0 0 120 40"><rect width="120" height="40" rx="7" fill="#f7f1f8"/>${lines}${dots}${letters}</svg>`;
+  return {
+    captchaId: id,
+    image: `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`,
+  };
+}
+
+function consumeCaptcha(captchaId, captchaCode) {
+  const id = String(captchaId || '').trim();
+  const input = String(captchaCode || '').trim().toLowerCase();
+  const rec = captchaStore.get(id);
+  captchaStore.delete(id);
+  if (!rec || rec.expiresAt < Date.now()) {
+    return '图形验证码已过期，请点击图片刷新后重试。';
+  }
+  if (!input || rec.answer !== input) {
+    return '图形验证码输入有误，请重新输入。';
+  }
+  return null;
+}
+
+function verifyAndConsumeEmailCode(email, purpose, codeInput) {
+  const code = String(codeInput || '').trim();
+  if (!/^\d{6}$/.test(code)) {
+    return '请输入 6 位数字邮箱验证码。';
+  }
+  const row = db.prepare(`
+    SELECT id, code_hash, expires_at, attempts
+    FROM email_codes
+    WHERE email = ? AND purpose = ? AND used_at IS NULL
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(email, purpose);
+  if (!row || row.expires_at < Date.now()) {
+    return '邮箱验证码已过期或不存在，请重新获取。';
+  }
+  if (row.attempts >= 5) {
+    return '该验证码错误次数过多，请重新获取。';
+  }
+  if (!verifyPassword(code, row.code_hash)) {
+    db.prepare('UPDATE email_codes SET attempts = attempts + 1 WHERE id = ?').run(row.id);
+    return '邮箱验证码不正确，请检查后重试。';
+  }
+  db.prepare('UPDATE email_codes SET used_at = ? WHERE id = ?').run(Date.now(), row.id);
   return null;
 }
 
@@ -156,7 +255,7 @@ function getCurrentUser(req) {
   const token = cookies[SESSION_COOKIE];
   if (!token) return null;
   const row = db.prepare(`
-    SELECT u.id, u.username, u.nickname, u.campus, u.role, u.color, s.expires_at
+    SELECT u.id, u.username, u.email, u.nickname, u.campus, u.role, u.color, s.expires_at
     FROM sessions s
     JOIN users u ON u.id = s.user_id
     WHERE s.token = ?
@@ -169,6 +268,7 @@ function getCurrentUser(req) {
   return {
     id: row.id,
     username: row.username,
+    email: row.email || null,
     nickname: row.nickname,
     initial: row.nickname.slice(0, 1),
     campus: row.campus,
@@ -442,6 +542,7 @@ async function handleApi(req, res, urlObj) {
     return sendJson(res, 200, {
       mode: 'server',
       user,
+      emailVerifyEnabled: isMailerConfigured(),
       unreadCount: Number(unreadCount),
       pendingReports: Number(pendingReports),
       verifyQuestion: getRandomVerifyQuestion(),
@@ -452,13 +553,80 @@ async function handleApi(req, res, urlObj) {
     return sendJson(res, 200, { verifyQuestion: getRandomVerifyQuestion() });
   }
 
+  // GET /api/captcha (SVG human image verification)
+  if (method === 'GET' && pathname === '/api/captcha') {
+    if (!checkRateLimit(`captcha:${ip}`, 60, 5 * 60 * 1000)) {
+      return sendJson(res, 429, { error: '获取图形验证码太频繁，请稍后再试。' });
+    }
+    return sendJson(res, 200, createSvgCaptcha());
+  }
+
+  // GET /api/auth/check-availability (live email & nickname duplicate check)
+  if (method === 'GET' && pathname === '/api/auth/check-availability') {
+    if (!checkRateLimit(`avail:${ip}`, 90, 5 * 60 * 1000)) {
+      return sendJson(res, 429, { error: '检查过于频繁，请稍后再试。' });
+    }
+    const emailParam = normalizeEmail(urlObj.searchParams.get('email'));
+    const nicknameParam = String(urlObj.searchParams.get('nickname') || '').trim();
+    const out = {};
+    if (emailParam) {
+      const existsEmail = db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)').get(emailParam, emailParam);
+      out.emailAvailable = !existsEmail;
+    }
+    if (nicknameParam) {
+      const existsNick = db.prepare('SELECT id FROM users WHERE LOWER(nickname) = LOWER(?)').get(nicknameParam);
+      out.nicknameAvailable = !existsNick;
+    }
+    return sendJson(res, 200, out);
+  }
+
+  // POST /api/auth/send-code (requires human image captcha before sending email code)
+  if (method === 'POST' && pathname === '/api/auth/send-code') {
+    if (!isMailerConfigured()) {
+      return sendJson(res, 503, { error: '站长尚未配置邮件发信服务，暂不可发送邮箱验证码。' });
+    }
+    if (!checkRateLimit(`sendcode:${ip}`, 10, 10 * 60 * 1000)) {
+      return sendJson(res, 429, { error: '发送验证码太频繁，请稍后再试。' });
+    }
+    const body = await readJsonBody(req);
+    const email = normalizeEmail(body.email);
+    const purpose = body.purpose === 'reset' ? 'reset' : 'register';
+
+    if (!email || email.length > 80 || !EMAIL_RE.test(email)) {
+      return sendJson(res, 400, { error: '请输入有效的邮箱地址。' });
+    }
+    const capErr = consumeCaptcha(body.captchaId, body.captchaCode);
+    if (capErr) return sendJson(res, 400, { error: capErr, refreshCaptcha: true });
+
+    const existing = db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)').get(email, email);
+    if (purpose === 'register' && existing) {
+      return sendJson(res, 409, { error: '该邮箱已被注册，请直接登录。' });
+    }
+    if (purpose === 'reset' && !existing) {
+      return sendJson(res, 404, { error: '未找到使用该邮箱注册的账号。' });
+    }
+
+    const recent = db.prepare('SELECT created_at FROM email_codes WHERE email = ? AND purpose = ? ORDER BY created_at DESC LIMIT 1').get(email, purpose);
+    if (recent && Date.now() - recent.created_at < 60 * 1000) {
+      const waitSec = Math.ceil((60 * 1000 - (Date.now() - recent.created_at)) / 1000);
+      return sendJson(res, 429, { error: `请 ${waitSec} 秒后再重新发送验证码。` });
+    }
+
+    const code = String(crypto.randomInt(100000, 1000000));
+    const now = Date.now();
+    await sendVerificationEmail({ to: email, code, purpose });
+    db.prepare('INSERT INTO email_codes (email, purpose, code_hash, expires_at, attempts, used_at, created_at) VALUES (?, ?, ?, ?, 0, NULL, ?)')
+      .run(email, purpose, hashPassword(code), now + 10 * 60 * 1000, now);
+    return sendJson(res, 200, { ok: true, cooldown: 60 });
+  }
+
   // POST /api/auth/register
   if (method === 'POST' && pathname === '/api/auth/register') {
     if (!checkRateLimit(`reg:${ip}`, 15, 10 * 60 * 1000)) {
       return sendJson(res, 429, { error: '操作太频繁，请稍后再试。' });
     }
     const body = await readJsonBody(req);
-    const username = String(body.username || '').trim();
+    const email = normalizeEmail(body.email || body.username);
     const password = String(body.password || '');
     const confirmPassword = body.confirmPassword !== undefined ? String(body.confirmPassword) : null;
     const nickname = String(body.nickname || '').trim();
@@ -466,8 +634,8 @@ async function handleApi(req, res, urlObj) {
     const questionId = Number(body.questionId);
     const answer = String(body.answer || '').trim();
 
-    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-      return sendJson(res, 400, { error: '账号需为 3–20 位字母、数字或下划线。' });
+    if (!email || email.length > 80 || !EMAIL_RE.test(email)) {
+      return sendJson(res, 400, { error: '请输入有效的邮箱地址作为账号。' });
     }
     const pwdErr = validatePasswordStrength(password);
     if (pwdErr) return sendJson(res, 400, { error: pwdErr });
@@ -483,6 +651,12 @@ async function handleApi(req, res, urlObj) {
     const nickBlock = checkContentCompliance(nickname);
     if (nickBlock) return sendJson(res, 400, { error: '昵称包含违规词汇，请更换。' });
 
+    const existsEmail = db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)').get(email, email);
+    if (existsEmail) return sendJson(res, 409, { error: '该邮箱已被注册，请直接登录。' });
+
+    const existsNick = db.prepare('SELECT id FROM users WHERE LOWER(nickname) = LOWER(?)').get(nickname);
+    if (existsNick) return sendJson(res, 409, { error: '该昵称已被其他同学使用，请换一个昵称。' });
+
     const qRow = db.prepare('SELECT id, question, answers_json FROM verify_questions WHERE id = ? AND active = 1').get(questionId);
     if (!qRow) return sendJson(res, 400, { error: '验证题已失效，请刷新后重试。' });
     const validAnswers = safeParseArray(qRow.answers_json).map((a) => String(a).trim().toLowerCase());
@@ -490,39 +664,47 @@ async function handleApi(req, res, urlObj) {
       return sendJson(res, 400, { error: '校内验证题答案不对哦，再想想重电同学都知道的简称！' });
     }
 
-    const exists = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
-    if (exists) return sendJson(res, 409, { error: '该账号已被注册，请换一个或直接登录。' });
+    if (isMailerConfigured()) {
+      const codeErr = verifyAndConsumeEmailCode(email, 'register', body.emailCode);
+      if (codeErr) return sendJson(res, 400, { error: codeErr });
+    } else {
+      const capErr = consumeCaptcha(body.captchaId, body.captchaCode);
+      if (capErr) return sendJson(res, 400, { error: capErr, refreshCaptcha: true });
+    }
 
     const color = AVATAR_COLORS[nickname.charCodeAt(0) % AVATAR_COLORS.length];
     const now = Date.now();
     const result = db.prepare(
-      'INSERT INTO users (username, nickname, campus, password_hash, role, color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(username, nickname, campus, hashPassword(password), 'user', color, now);
+      'INSERT INTO users (username, email, nickname, campus, password_hash, role, color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(email, email, nickname, campus, hashPassword(password), 'user', color, now);
 
     const newUserId = Number(result.lastInsertRowid);
     createSession(res, newUserId);
     return sendJson(res, 201, {
-      user: { id: newUserId, username, nickname, initial: nickname.slice(0, 1), campus, role: 'user', color },
+      user: { id: newUserId, username: email, email, nickname, initial: nickname.slice(0, 1), campus, role: 'user', color },
     });
   }
 
-  // POST /api/auth/login
+  // POST /api/auth/login (supports both email and legacy username like 'admin')
   if (method === 'POST' && pathname === '/api/auth/login') {
     if (!checkRateLimit(`login:${ip}`, 20, 10 * 60 * 1000)) {
       return sendJson(res, 429, { error: '登录尝试过于频繁，请 10 分钟后再试。' });
     }
     const body = await readJsonBody(req);
-    const username = String(body.username || '').trim();
+    const identifier = String(body.email || body.username || '').trim();
     const password = String(body.password || '');
-    const row = db.prepare('SELECT id, username, nickname, campus, password_hash, role, color FROM users WHERE username = ?').get(username);
+    const row = db.prepare(
+      'SELECT id, username, email, nickname, campus, password_hash, role, color FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)'
+    ).get(identifier, identifier);
     if (!row || !verifyPassword(password, row.password_hash)) {
-      return sendJson(res, 401, { error: '账号或密码错误。' });
+      return sendJson(res, 401, { error: '邮箱/账号或密码错误。' });
     }
     createSession(res, row.id);
     return sendJson(res, 200, {
       user: {
         id: row.id,
         username: row.username,
+        email: row.email || null,
         nickname: row.nickname,
         initial: row.nickname.slice(0, 1),
         campus: row.campus,
@@ -530,6 +712,34 @@ async function handleApi(req, res, urlObj) {
         color: row.color,
       },
     });
+  }
+
+  // POST /api/auth/reset-password (via email verification code)
+  if (method === 'POST' && pathname === '/api/auth/reset-password') {
+    if (!isMailerConfigured()) {
+      return sendJson(res, 503, { error: '邮件服务尚未配置，暂不支持自助重置密码。' });
+    }
+    if (!checkRateLimit(`reset:${ip}`, 10, 10 * 60 * 1000)) {
+      return sendJson(res, 429, { error: '操作太频繁，请稍后再试。' });
+    }
+    const body = await readJsonBody(req);
+    const email = normalizeEmail(body.email);
+    const newPassword = String(body.newPassword || '');
+    const confirmNewPassword = body.confirmNewPassword !== undefined ? String(body.confirmNewPassword) : null;
+    if (!email || !EMAIL_RE.test(email)) return sendJson(res, 400, { error: '请输入有效邮箱地址。' });
+    const pwdErr = validatePasswordStrength(newPassword);
+    if (pwdErr) return sendJson(res, 400, { error: pwdErr });
+    if (confirmNewPassword !== null && newPassword !== confirmNewPassword) {
+      return sendJson(res, 400, { error: '两次输入的新密码不一致。' });
+    }
+    const row = db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)').get(email, email);
+    if (!row) return sendJson(res, 404, { error: '未找到该邮箱对应的账号。' });
+    const codeErr = verifyAndConsumeEmailCode(email, 'reset', body.emailCode);
+    if (codeErr) return sendJson(res, 400, { error: codeErr });
+
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(newPassword), row.id);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(row.id);
+    return sendJson(res, 200, { ok: true });
   }
 
   // POST /api/auth/logout
