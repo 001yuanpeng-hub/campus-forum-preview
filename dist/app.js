@@ -366,6 +366,32 @@ function renderAuthButton() {
   if (!currentUser) updateNotifBadge(0);
 }
 
+function validatePasswordStrength(password) {
+  if (!password || password.length < 8 || password.length > 64) {
+    return '密码长度需在 8–64 位之间。';
+  }
+  if (/\s/.test(password)) {
+    return '密码不能包含空格。';
+  }
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9\s]/.test(password)) {
+    return '请使用至少 8 个字符，且同时包含字母、数字和符号的组合。';
+  }
+  return null;
+}
+
+function resetPasswordVisibility(root = document) {
+  root.querySelectorAll('.pwd-wrap').forEach((wrap) => {
+    const input = wrap.querySelector('input');
+    const btn = wrap.querySelector('[data-toggle-pwd]');
+    if (input) input.type = 'password';
+    if (btn) {
+      btn.setAttribute('aria-pressed', 'false');
+      btn.setAttribute('aria-label', '显示密码');
+      btn.innerHTML = icon('eye');
+    }
+  });
+}
+
 function syncAuthTabUI() {
   const tabsWrap = $('#auth-mode-tabs');
   tabsWrap.hidden = !isServerMode || Boolean(currentUser);
@@ -376,15 +402,22 @@ function syncAuthTabUI() {
   const isLogin = isServerMode && authTab === 'login';
   $('#field-username').hidden = !isServerMode;
   $('#field-password').hidden = !isServerMode;
+  $('#field-confirm-password').hidden = !isServerMode || isLogin;
   $('#field-nickname').hidden = isLogin;
   $('#field-campus').hidden = isLogin;
   $('#field-verify').hidden = isLogin;
 
   authForm.elements.username.required = isServerMode;
   authForm.elements.password.required = isServerMode;
+  authForm.elements.confirmPassword.required = isServerMode && !isLogin;
   authForm.elements.nickname.required = !isLogin;
   authForm.elements.campus.required = !isLogin;
   authForm.elements.answer.required = !isLogin;
+
+  authForm.elements.password.autocomplete = isLogin ? 'current-password' : 'new-password';
+  authForm.elements.password.placeholder = isLogin ? '输入密码' : '请使用字母、数字和符号组合（至少 8 位）';
+  $('#auth-password-hint').textContent = isLogin ? '' : '至少 8 位，需包含字母、数字和符号';
+  resetPasswordVisibility(authDialog);
 
   if (!isServerMode) {
     $('#auth-panel-label').textContent = '轻校内验证（演示模式）';
@@ -453,6 +486,9 @@ async function openAuthDialog(onSuccess = null, preferredTab = 'register') {
     $('#auth-profile').innerHTML = `<div class="auth-profile-left">${avatar(currentUser)}<div><strong>${escapeHtml(currentUser.nickname)}</strong>${roleTag}<div class="form-note">${sub}</div></div></div>${profileBtn}`;
     $('#change-password-box').hidden = !isServerMode;
     $('#change-password-box').open = false;
+    $('#change-password-error').hidden = true;
+    $('#change-password-form').reset();
+    resetPasswordVisibility(authDialog);
     const isAdmin = isServerMode && currentUser.role === 'admin';
     $('#admin-reports-panel').hidden = !isAdmin;
     $('#admin-questions-panel').hidden = !isAdmin;
@@ -1106,6 +1142,19 @@ document.addEventListener('click', async (event) => {
     syncAuthTabUI();
   }
 
+  const eyeBtn = event.target.closest('[data-toggle-pwd]');
+  if (eyeBtn) {
+    const input = eyeBtn.closest('.pwd-wrap')?.querySelector('input');
+    if (input) {
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      eyeBtn.setAttribute('aria-pressed', showing ? 'false' : 'true');
+      eyeBtn.setAttribute('aria-label', showing ? '显示密码' : '隐藏密码');
+      eyeBtn.innerHTML = icon(showing ? 'eye' : 'eye-off');
+      input.focus();
+    }
+  }
+
   const removeBtn = event.target.closest('[data-remove-img]');
   if (removeBtn) {
     pendingImages.splice(Number(removeBtn.dataset.removeImg), 1);
@@ -1253,19 +1302,38 @@ $('#logout-btn').addEventListener('click', async () => {
 $('#change-password-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
+  const err = $('#change-password-error');
+  err.hidden = true;
+  const oldPassword = form.elements.oldPassword.value;
+  const newPassword = form.elements.newPassword.value;
+  const confirmNewPassword = form.elements.confirmNewPassword.value;
+
+  const pwdErr = validatePasswordStrength(newPassword);
+  if (pwdErr) {
+    err.textContent = pwdErr;
+    err.hidden = false;
+    form.elements.newPassword.focus();
+    return;
+  }
+  if (newPassword !== confirmNewPassword) {
+    err.textContent = '两次输入的新密码不一致，请重新确认。';
+    err.hidden = false;
+    form.elements.confirmNewPassword.focus();
+    return;
+  }
+
   try {
     await api('/api/auth/change-password', {
       method: 'POST',
-      body: JSON.stringify({
-        oldPassword: form.elements.oldPassword.value,
-        newPassword: form.elements.newPassword.value,
-      }),
+      body: JSON.stringify({ oldPassword, newPassword, confirmNewPassword }),
     });
     form.reset();
+    resetPasswordVisibility(form);
     $('#change-password-box').open = false;
     showToast('密码已更新，下次登录请使用新密码');
-  } catch (err) {
-    showToast(err.message);
+  } catch (e) {
+    err.textContent = e.message;
+    err.hidden = false;
   }
 });
 
@@ -1292,6 +1360,23 @@ authForm.addEventListener('submit', async (event) => {
   const submitBtn = $('#auth-submit');
 
   if (isServerMode) {
+    if (authTab !== 'login') {
+      const password = authForm.elements.password.value;
+      const confirmPassword = authForm.elements.confirmPassword.value;
+      const pwdErr = validatePasswordStrength(password);
+      if (pwdErr) {
+        err.textContent = pwdErr;
+        err.hidden = false;
+        authForm.elements.password.focus();
+        return;
+      }
+      if (password !== confirmPassword) {
+        err.textContent = '两次输入的密码不一致，请重新确认。';
+        err.hidden = false;
+        authForm.elements.confirmPassword.focus();
+        return;
+      }
+    }
     submitBtn.disabled = true;
     try {
       const data = authTab === 'login'
@@ -1304,6 +1389,7 @@ authForm.addEventListener('submit', async (event) => {
             body: JSON.stringify({
               username: authForm.elements.username.value.trim(),
               password: authForm.elements.password.value,
+              confirmPassword: authForm.elements.confirmPassword.value,
               nickname: authForm.elements.nickname.value.trim(),
               campus: authForm.elements.campus.value,
               questionId: currentVerifyQuestion?.id,

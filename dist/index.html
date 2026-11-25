@@ -49,6 +49,8 @@
     <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.2s-7.5-4.6-8.8-9.5A4.8 4.8 0 0 1 12 6.8a4.8 4.8 0 0 1 8.8 3.9c-1.3 4.9-8.8 9.5-8.8 9.5Z"/></symbol>
     <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
     <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2.5 19.5h19L12 3Z"/><path d="M12 9.5v4.5"/><circle cx="12" cy="16.8" r=".6" fill="currentColor"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 10.7a2.8 2.8 0 0 0 3.7 3.7"/><path d="M9.9 5.7A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3.3 4.3"/><path d="M6.2 7.5A17.3 17.3 0 0 0 2.5 12s3.5 6.5 9.5 6.5a9.4 9.4 0 0 0 3.1-.5"/></symbol>
   </svg>
 
   <header class="topbar">
@@ -167,7 +169,17 @@
         <p class="form-note" id="auth-desc">答对一道重电校内常识题即可注册发帖、回复和查看互助联系方式（防校外广告）。</p>
         <div id="auth-account-fields" class="auth-fields">
           <label id="field-username"><span>账号 <span class="choice-hint">3–20 位字母、数字或下划线</span></span><input name="username" maxlength="20" placeholder="如：cqetc_chen" autocomplete="username"></label>
-          <label id="field-password"><span>密码 <span class="choice-hint">至少 6 位</span></span><input name="password" type="password" maxlength="64" placeholder="输入密码" autocomplete="current-password"></label>
+          <label id="field-password">
+            <span>密码 <span class="choice-hint" id="auth-password-hint">至少 8 位，需包含字母、数字和符号</span></span>
+            <div class="pwd-wrap">
+              <input name="password" type="password" maxlength="64" placeholder="请使用字母、数字和符号组合（至少 8 位）" autocomplete="new-password">
+              <button type="button" class="pwd-eye" data-toggle-pwd aria-label="显示密码" aria-pressed="false"><svg class="icon"><use href="#i-eye"/></svg></button>
+            </div>
+          </label>
+          <label id="field-confirm-password">
+            <span>确认密码 <span class="choice-hint">请再次输入密码</span></span>
+            <input name="confirmPassword" type="password" maxlength="64" placeholder="再次输入密码以确认" autocomplete="new-password">
+          </label>
           <label id="field-nickname"><span>昵称</span><input name="nickname" maxlength="16" placeholder="如：小陈、两江小周"></label>
           <label id="field-campus"><span>常驻校区</span><select name="campus"></select></label>
           <label id="field-verify">
@@ -190,7 +202,13 @@
           <summary class="admin-summary">修改登录密码</summary>
           <form id="change-password-form" class="admin-q-form" style="margin-top:8px">
             <input name="oldPassword" type="password" required placeholder="输入当前原密码" autocomplete="current-password">
-            <input name="newPassword" type="password" required minlength="6" maxlength="64" placeholder="输入新密码（至少 6 位）" autocomplete="new-password">
+            <div class="pwd-wrap">
+              <input name="newPassword" type="password" required minlength="8" maxlength="64" placeholder="新密码（至少 8 位，含字母、数字和符号）" autocomplete="new-password">
+              <button type="button" class="pwd-eye" data-toggle-pwd aria-label="显示密码" aria-pressed="false"><svg class="icon"><use href="#i-eye"/></svg></button>
+            </div>
+            <input name="confirmNewPassword" type="password" required minlength="8" maxlength="64" placeholder="再次输入新密码以确认" autocomplete="new-password">
+            <p class="form-note">密码要求：至少 8 个字符，需同时包含字母、数字和符号（不含空格）。</p>
+            <p class="form-error" id="change-password-error" hidden></p>
             <button class="button secondary small" type="submit">保存新密码</button>
           </form>
         </details>

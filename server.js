@@ -59,6 +59,20 @@ function checkContentCompliance(...texts) {
   return null;
 }
 
+// 参照 Google 注册密码规则：至少 8 位，需同时包含字母、数字和符号，且不含空格
+function validatePasswordStrength(password) {
+  if (typeof password !== 'string' || password.length < 8 || password.length > 64) {
+    return '密码长度需在 8–64 位之间。';
+  }
+  if (/\s/.test(password)) {
+    return '密码不能包含空格。';
+  }
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9\s]/.test(password)) {
+    return '请使用至少 8 个字符，且同时包含字母、数字和符号的组合。';
+  }
+  return null;
+}
+
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -446,6 +460,7 @@ async function handleApi(req, res, urlObj) {
     const body = await readJsonBody(req);
     const username = String(body.username || '').trim();
     const password = String(body.password || '');
+    const confirmPassword = body.confirmPassword !== undefined ? String(body.confirmPassword) : null;
     const nickname = String(body.nickname || '').trim();
     const campus = String(body.campus || '大学城').trim();
     const questionId = Number(body.questionId);
@@ -454,8 +469,10 @@ async function handleApi(req, res, urlObj) {
     if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
       return sendJson(res, 400, { error: '账号需为 3–20 位字母、数字或下划线。' });
     }
-    if (password.length < 6 || password.length > 64) {
-      return sendJson(res, 400, { error: '密码长度需在 6–64 位之间。' });
+    const pwdErr = validatePasswordStrength(password);
+    if (pwdErr) return sendJson(res, 400, { error: pwdErr });
+    if (confirmPassword !== null && password !== confirmPassword) {
+      return sendJson(res, 400, { error: '两次输入的密码不一致。' });
     }
     if (!nickname || nickname.length > 16) {
       return sendJson(res, 400, { error: '请填写 1–16 字的昵称。' });
@@ -529,8 +546,11 @@ async function handleApi(req, res, urlObj) {
     const body = await readJsonBody(req);
     const oldPassword = String(body.oldPassword || '');
     const newPassword = String(body.newPassword || '');
-    if (newPassword.length < 6 || newPassword.length > 64) {
-      return sendJson(res, 400, { error: '新密码长度需在 6–64 位之间。' });
+    const confirmNewPassword = body.confirmNewPassword !== undefined ? String(body.confirmNewPassword) : null;
+    const pwdErr = validatePasswordStrength(newPassword);
+    if (pwdErr) return sendJson(res, 400, { error: pwdErr });
+    if (confirmNewPassword !== null && newPassword !== confirmNewPassword) {
+      return sendJson(res, 400, { error: '两次输入的新密码不一致。' });
     }
     const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(user.id);
     if (!row || !verifyPassword(oldPassword, row.password_hash)) {

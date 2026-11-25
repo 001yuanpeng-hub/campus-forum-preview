@@ -227,6 +227,12 @@ dialog::backdrop { background: #00000038; }
 .form-error { color: #b42318; font-size: 13px; background: #fef3f2; border: 1px solid #fecdca; border-radius: 6px; padding: 7px 10px; }
 .composer-form label, .reply-form label { display: grid; gap: 5px; font-weight: 600; font-size: 14px; }
 .composer-form input, .composer-form select, textarea { width: 100%; min-width: 0; border: 1px solid #dcd4e2; padding: 7px 9px; border-radius: 6px; color: var(--ink); font-weight: 400; background: var(--paper); }
+.pwd-wrap { position: relative; display: flex; align-items: center; }
+.pwd-wrap input { padding-right: 38px; }
+.pwd-wrap input::-ms-reveal, .pwd-wrap input::-ms-clear { display: none; }
+.pwd-eye { position: absolute; right: 4px; width: 30px; height: 30px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); display: grid; place-items: center; padding: 0; }
+.pwd-eye:hover { background: var(--soft); color: var(--accent-dark); }
+.pwd-eye .icon { width: 16px; height: 16px; }
 .choice-set { min-width: 0; margin: 0; padding: 0; border: 0; }
 .choice-set legend { margin-bottom: 6px; padding: 0; font-weight: 600; font-size: 14px; }
 .choice-hint { color: var(--muted); font-size: 12px; font-weight: 400; }
