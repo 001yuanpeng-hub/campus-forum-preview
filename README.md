@@ -4,7 +4,8 @@
 
 界面参考 LINUX DO / Discourse 的白底紧凑列表与左侧导航，主色采用重电官方视觉识别标准色 **「重电紫」（`#801C80`）**，后端使用 **零依赖 Node.js + 内置 SQLite**，目标是解决传统校园墙**消息容易过时、无法有效搜索、联系方式易泄露**等痛点。
 
-> **静态交互预览（GitHub Pages）**：https://001yuanpeng-hub.github.io/campus-forum-preview/  
+> **正式在线地址（HTTPS）**：https://cquet.top/  
+> **静态演示预览（GitHub Pages）**：https://001yuanpeng-hub.github.io/campus-forum-preview/  
 > （前端会自动识别运行环境：部署在 Node.js 后端上时启用真实账号与数据库，在 GitHub Pages 上自动降级为本地演示模式。）
 
 ---
@@ -73,7 +74,7 @@ campus-forum-preview/
 
 - [x] **第一阶段：前端交互原型**（重电紫主题、精绘图标、校园互助生命周期、轻校内验证、截图压缩预览、GitHub Pages 在线预览）
 - [x] **第二阶段：全栈社区化**（零依赖 Node.js + SQLite 后端、真实账号与服务端题库验证、服务端联系方式保护、图片上传、通知铃铛、点赞、发帖编辑、个人主页、违禁词拦截与举报治理、PWA 支持）
-- [x] **第三阶段：阿里云上线部署**（轻量应用服务器 + Nginx + systemd 守护进程 + SQLite 每日自动热备份；下一步绑定 `cquet.top` 域名与免费 HTTPS）
+- [x] **第三阶段：阿里云上线部署**（中国香港免备案 ECS + `cquet.top` 域名 + Let's Encrypt 免费 HTTPS 自动续期 + Nginx + systemd 守护进程 + SQLite 每日自动热备份）
 
 ---
 
