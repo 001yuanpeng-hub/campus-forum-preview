@@ -60,7 +60,7 @@ mkdir -p "${APP_DIR}/data" "${APP_DIR}/uploads" /opt/cqetc-backups
 
 echo "==> 4/6 生成环境变量 ${APP_DIR}/.env（若已存在则保留）"
 if [[ ! -f "${APP_DIR}/.env" ]]; then
-  GEN_PASS="${ADMIN_PASSWORD:-$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 14)}"
+  GEN_PASS="${ADMIN_PASSWORD:-$(node -e "process.stdout.write(require('node:crypto').randomBytes(10).toString('base64url'))")}"
   cat > "${APP_DIR}/.env" <<EOF
 HOST=127.0.0.1
 PORT=3000
