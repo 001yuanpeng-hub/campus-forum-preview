@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="重电校园站，面向重庆电子科技职业大学同学的校园问答、经验分享与互助社区原型。">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="重电校园站，面向重庆电子科技职业大学同学的校园问答、经验分享与互助社区。">
+  <meta name="theme-color" content="#801c80">
   <title>重电校园站 · 校园问答与互助社区</title>
   <link rel="stylesheet" href="styles.css">
   <script defer src="app.js"></script>
@@ -22,6 +22,7 @@
     <symbol id="i-package" viewBox="0 0 24 24"><path d="M12 2.8 4 7.2v9.6l8 4.4 8-4.4V7.2L12 2.8Z"/><path d="m4 7.2 8 4.4 8-4.4M12 11.6V21M8 5l8 4.4"/></symbol>
     <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 8h12l1 11.5A2 2 0 0 1 17 21H7a2 2 0 0 1-2-1.5L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.7-6.5-11a6.5 6.5 0 1 1 13 0c0 5.3-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+    <symbol id="i-thumbtack" viewBox="0 0 24 24"><path d="M12 17v5M9 10.8V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v5.8l2.2 2.2a1 1 0 0 1-.7 1.7H7.5a1 1 0 0 1-.7-1.7L9 10.8Z"/></symbol>
     <symbol id="i-map" viewBox="0 0 24 24"><path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20V6.5Z"/><path d="M9 4v13.5M15 6.5V20"/></symbol>
     <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 5h11.5a1 1 0 0 1 .8 1.6L15 9.5l2.3 2.9a1 1 0 0 1-.8 1.6H5"/></symbol>
     <symbol id="i-waves" viewBox="0 0 24 24"><path d="M3 9.5c2.2 0 2.8-2 5-2s2.8 2 5 2 2.8-2 5-2 2.8 2 3 2"/><path d="M3 15.5c2.2 0 2.8-2 5-2s2.8 2 5 2 2.8-2 5-2 2.8 2 3 2"/></symbol>
@@ -40,6 +41,7 @@
     <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8.5 11V7.5a3.5 3.5 0 0 1 7 0V11"/></symbol>
     <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15.5-4.5-4.5L9 18.5"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5a7 7 0 0 1 14 0"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 17 20l1-13M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/></symbol>
   </svg>
 
   <header class="topbar">
@@ -51,7 +53,7 @@
         <kbd aria-hidden="true">/</kbd>
       </form>
       <div class="top-actions">
-        <button class="button secondary auth-trigger" id="auth-button" type="button" data-auth><svg class="icon"><use href="#i-user"/></svg><span>校内验证</span></button>
+        <button class="button secondary auth-trigger" id="auth-button" type="button" data-auth><svg class="icon"><use href="#i-user"/></svg><span>登录 / 注册</span></button>
         <button class="button primary header-post" type="button" data-compose><svg class="icon"><use href="#i-plus"/></svg><span>发布帖子</span></button>
       </div>
     </div>
@@ -70,13 +72,13 @@
           <div class="rail-label">按标签筛选</div>
           <div id="tag-filters" class="tag-filters" role="group" aria-label="按标签筛选"></div>
         </div>
-        <p class="rail-footer">重庆电子科技职业大学<br>学生社区原型 · 非官方</p>
+        <p class="rail-footer">重庆电子科技职业大学<br>学生社区 · 非官方</p>
       </div>
     </aside>
 
     <main id="main" tabindex="-1">
       <section id="feed-page" aria-labelledby="feed-title">
-        <div class="site-note"><svg class="icon" aria-hidden="true"><use href="#i-compass"/></svg><span>校园问答、经验沉淀与互助 <span class="note-divider" aria-hidden="true">·</span> <a href="#topic/welcome">发帖指南</a></span><span class="sample-label">演示原型</span></div>
+        <div class="site-note"><svg class="icon" aria-hidden="true"><use href="#i-compass"/></svg><span>校园问答、经验沉淀与互助 <span class="note-divider" aria-hidden="true">·</span> <a href="#topic/welcome">发帖指南</a></span><span class="sample-label" id="mode-badge">正在连接...</span></div>
         <h1 id="feed-title" class="visually-hidden">校园讨论</h1>
         <div class="feed-tools" id="feed-tools">
           <div id="tabs" class="feed-tabs" role="group" aria-label="帖子筛选"></div>
@@ -101,7 +103,7 @@
         <div><div class="panel-label">重电校园站</div><h2 id="composer-title">发布帖子</h2></div>
         <button class="icon-button" id="close-composer" type="button" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button>
       </div>
-      <p class="form-note">演示模式：内容保存在当前浏览器，图片自动压缩。请勿发布代课、代做作业等违规信息。</p>
+      <p class="form-note" id="composer-note">图片自动压缩上传；请勿发布代课、代做作业等违规信息。</p>
       <label>标题<input name="title" required maxlength="80" placeholder="一句话说清楚你的问题、经验或互助需求"></label>
       <fieldset class="choice-set"><legend>版块</legend><div class="choice-grid" id="post-categories"></div></fieldset>
       <label>校区<select name="campus" required></select></label>
@@ -118,7 +120,7 @@
             <option value="0">长期有效</option>
           </select></label>
         </div>
-        <label><span>联系方式 <span class="choice-hint">选填 · 仅校内验证登录后可见，结贴自动隐藏</span></span><input name="contact" maxlength="60" placeholder="如：QQ 12345678（备注快递）或微信号"></label>
+        <label><span>联系方式 <span class="choice-hint">选填 · 仅登录后由服务器下发，结贴自动隐藏</span></span><input name="contact" maxlength="60" placeholder="如：QQ 12345678（备注快递）或微信号"></label>
       </div>
 
       <fieldset class="choice-set"><legend>标签 <span class="choice-hint">可多选</span></legend><div class="choice-grid tag-choices" id="post-tags"></div></fieldset>
@@ -132,36 +134,61 @@
         <div class="upload-previews" id="upload-previews" hidden></div>
       </div>
 
-      <div class="dialog-actions"><button class="button secondary" id="cancel-post" type="button">取消</button><button class="button primary" type="submit">发布帖子</button></div>
+      <div class="dialog-actions"><button class="button secondary" id="cancel-post" type="button">取消</button><button class="button primary" id="submit-post-btn" type="submit">发布帖子</button></div>
     </form>
   </dialog>
 
   <dialog id="auth-dialog" aria-labelledby="auth-title">
-    <form id="auth-form" class="composer-form">
+    <div class="composer-form">
       <div class="dialog-head">
-        <div><div class="panel-label">轻校内验证</div><h2 id="auth-title">验证同学身份</h2></div>
+        <div><div class="panel-label" id="auth-panel-label">同学账号</div><h2 id="auth-title">登录或注册</h2></div>
         <button class="icon-button" id="close-auth" type="button" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button>
       </div>
-      <p class="form-note" id="auth-desc">答对一道重电校内常识题即可发帖、回复和查看互助联系方式（防校外广告）。</p>
-      <div id="auth-fields" class="auth-fields">
-        <label>你的昵称<input name="nickname" required maxlength="16" placeholder="如：小陈、两江小周"></label>
-        <label>常驻校区<select name="campus" required></select></label>
-        <label>
-          <span id="verify-question-label">校内验证题：我们学校的别名是啥？</span>
-          <input name="answer" required maxlength="20" placeholder="请输入答案（提示：三个字）" autocomplete="off">
-        </label>
-        <p class="form-error" id="auth-error" hidden></p>
+
+      <div class="auth-tabs" id="auth-mode-tabs" role="tablist">
+        <button type="button" class="auth-tab" data-auth-tab="register" aria-selected="true">新同学注册（校内验证）</button>
+        <button type="button" class="auth-tab" data-auth-tab="login" aria-selected="false">已有账号登录</button>
       </div>
+
+      <form id="auth-form" class="auth-form-grid">
+        <p class="form-note" id="auth-desc">答对一道重电校内常识题即可注册发帖、回复和查看互助联系方式（防校外广告）。</p>
+        <div id="auth-account-fields" class="auth-fields">
+          <label id="field-username"><span>账号 <span class="choice-hint">3–20 位字母、数字或下划线</span></span><input name="username" maxlength="20" placeholder="如：cqetc_chen" autocomplete="username"></label>
+          <label id="field-password"><span>密码 <span class="choice-hint">至少 6 位</span></span><input name="password" type="password" maxlength="64" placeholder="输入密码" autocomplete="current-password"></label>
+          <label id="field-nickname"><span>昵称</span><input name="nickname" maxlength="16" placeholder="如：小陈、两江小周"></label>
+          <label id="field-campus"><span>常驻校区</span><select name="campus"></select></label>
+          <label id="field-verify">
+            <span id="verify-question-label">校内验证题：我们学校的别名是啥？</span>
+            <input name="answer" maxlength="20" placeholder="请输入校内常识题答案" autocomplete="off">
+          </label>
+        </div>
+        <p class="form-error" id="auth-error" hidden></p>
+        <div class="dialog-actions" id="auth-form-actions">
+          <button class="button secondary" id="cancel-auth" type="button">取消</button>
+          <button class="button primary" id="auth-submit" type="submit">完成注册并登录</button>
+        </div>
+      </form>
+
       <div id="auth-signed-in" class="auth-signed-in" hidden>
         <div class="auth-profile" id="auth-profile"></div>
-        <p class="form-note">当前已通过校内验证，可以发帖、回复、结贴并查看互助联系方式。</p>
+        <p class="form-note" id="auth-signed-note">当前已登录，可以发帖、回复、结贴、采纳答案并查看互助联系方式。</p>
+
+        <div id="admin-questions-panel" class="admin-box" hidden>
+          <div class="admin-box-head">校内验证题库管理 <span class="choice-hint">注册时随机抽题，防校外广告</span></div>
+          <div id="admin-questions-list" class="admin-q-list"></div>
+          <form id="admin-question-form" class="admin-q-form">
+            <input name="question" required maxlength="100" placeholder="新题目，如：大学城校区最靠近哪条地铁线？">
+            <input name="answers" required maxlength="100" placeholder="可接受答案（多个用逗号隔开，如：1号线,轨道1号线）">
+            <button class="button secondary small" type="submit">添加验证题</button>
+          </form>
+        </div>
+
+        <div class="dialog-actions">
+          <button class="button secondary" id="close-signed-auth" type="button">关闭</button>
+          <button class="button secondary danger-text" id="logout-btn" type="button">退出登录</button>
+        </div>
       </div>
-      <div class="dialog-actions" id="auth-actions">
-        <button class="button secondary" id="cancel-auth" type="button">取消</button>
-        <button class="button secondary" id="logout-btn" type="button" hidden>退出验证</button>
-        <button class="button primary" id="auth-submit" type="submit">完成验证</button>
-      </div>
-    </form>
+    </div>
   </dialog>
 
   <dialog id="lightbox" class="lightbox" aria-label="查看大图">

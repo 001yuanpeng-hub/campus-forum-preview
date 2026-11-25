@@ -31,9 +31,9 @@ const tabs = [
   { id: 'unanswered', name: '待回答' },
 ];
 
-// 轻校内验证题库（后续可直接往数组里追加更多重电校内常识题）
-const verifyQuestions = [
-  { question: '我们学校的别名是啥？', answers: ['电子校'] },
+// 静态演示模式备用题库（接入后端后验证完全在服务器端进行）
+const demoVerifyQuestions = [
+  { id: 1, question: '我们学校的别名是啥？', answers: ['电子校'] },
 ];
 
 const HOUR = 3600 * 1000;
@@ -41,6 +41,21 @@ const DAY = 24 * HOUR;
 const bootNow = Date.now();
 
 const seed = [
+  {
+    id: 'welcome',
+    title: '第一次来重电校园站？看看这份社区发帖与互助指南',
+    category: 'notice',
+    tags: ['guide'],
+    campus: '全校',
+    pinned: true,
+    author: '校园站',
+    initial: '校',
+    color: 'violet',
+    createdAt: Date.parse('2026-06-12T09:00:00+08:00'),
+    views: 108,
+    body: '1. 提问与经验分享：写清楚校区、你想解决的问题和已经试过的方法。\n2. 校园互助（跑腿代取、二手、拼车、失物招领）：请填好有效期和独立联系方式，完成后点「标记为已完成」，联系方式会自动隐藏。\n3. 社区边界：请勿发布代课、代做作业、刷课或任何违规广告信息。\n\n当前为离线演示模式，试发内容保存在当前浏览器。运行本地后端服务后可启用多人账号与数据库持久化。',
+    replies: [],
+  },
   {
     id: 'errand-parcel',
     title: '【跑腿代取】大学城菜鸟驿站帮拿一个小件快递到 6 栋楼下',
@@ -142,9 +157,6 @@ const seed = [
   { id: 'lab-notes', title: '我怎么写实验记录，复现时才不用从头再试', category: 'study', tags: ['notes', 'project'], campus: '两江', author: '周同学', initial: '周', color: 'blue', createdAt: Date.parse('2026-11-06T16:30:00+08:00'), views: 93, body: '每次实验我会记录四项：软件版本、输入条件、实际结果、下一次要验证的变化。调试时一次只改一处，这样即使实验没成功，也能判断哪一步出了问题。\n\n如果发给同学，记得附上能复现的最小例子，并说明依赖和数据从哪里来。', replies: [
     { id: 'r4', author: '许同学', initial: '许', color: 'rose', createdAt: Date.parse('2026-11-06T18:10:00+08:00'), body: '记版本特别有用，同一个工程换电脑后遇到过好几次环境差异。' },
   ] },
-  { id: 'lab-checklist', title: '第一次进实训室前，哪些东西值得提前准备？', category: 'study', tags: ['question', 'guide'], campus: '永川', author: '叶同学', initial: '叶', color: 'green', createdAt: Date.parse('2026-11-06T14:15:00+08:00'), views: 67, body: '准备整理一份实训前检查清单。我想到的是提前确认软件版本、下载老师给的材料、准备数据线。哪些东西你们是到了教室才发现缺的？', replies: [] },
-  { id: 'campus-map', title: '新生想问：第一次去另一个校区，怎么确认上课地点？', category: 'life', tags: ['question', 'guide'], campus: '全校', author: '方同学', initial: '方', color: 'violet', createdAt: Date.parse('2026-11-06T10:05:00+08:00'), views: 52, body: '课表上只看到楼栋简称，有没有同学知道应该到哪里核对校区和教室？如果是临时换教室，通常看哪个通知最准确？', replies: [] },
-  { id: 'welcome', title: '第一次发帖？看看这份校园站发帖指南', category: 'notice', tags: ['guide'], campus: '全校', author: '校园站', initial: '站', color: 'green', createdAt: Date.parse('2026-06-12T09:00:00+08:00'), views: 108, body: '1. 提问与经验分享：写清楚校区、你想解决的问题和已经试过的方法。\n2. 校园互助（跑腿代取、二手、拼车、失物招领）：请填好有效期和独立联系方式，完成后点「标记为已完成」，联系方式会自动隐藏。\n3. 社区边界：请勿发布代课、代做作业、刷课或任何违规广告信息。\n\n当前为本地交互原型，试发内容与验证状态保存在当前浏览器。', replies: [] },
 ];
 
 const $ = (selector) => document.querySelector(selector);
@@ -159,10 +171,15 @@ const lightbox = $('#lightbox');
 const storageKey = 'cqetc-campus-demo-v2';
 const fullDate = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' });
 const filters = { category: 'all', campus: 'all', tag: 'all', tab: 'latest', query: '', activeOnly: false };
+
+let isServerMode = false;
+let currentUser = null;
+let currentVerifyQuestion = demoVerifyQuestions[0];
+let authTab = 'register';
 let pendingImages = [];
-let currentVerifyIndex = 0;
 let afterAuthAction = null;
 let toastTimer;
+let searchDebounce;
 
 function loadDemo() {
   try {
@@ -189,8 +206,21 @@ function saveDemo() {
   }
 }
 
+async function api(url, options = {}) {
+  const res = await fetch(url, {
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    ...options,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `请求失败 (${res.status})`);
+  }
+  return data;
+}
+
 function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+  return String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 }
 
 function icon(name) {
@@ -198,7 +228,7 @@ function icon(name) {
 }
 
 function avatar(person) {
-  return `<span class="avatar ${escapeHtml(person.color || 'green')}" aria-hidden="true">${escapeHtml(person.initial || '友')}</span>`;
+  return `<span class="avatar ${escapeHtml(person.color || 'violet')}" aria-hidden="true">${escapeHtml(person.initial || '友')}</span>`;
 }
 
 function categoryName(id) {
@@ -210,7 +240,7 @@ function topicHref(id, replyId) {
   return replyId ? `${topicPath}/${encodeURIComponent(replyId)}` : topicPath;
 }
 
-function effectiveStatus(topic, now = Date.now()) {
+function effectiveDemoStatus(topic, now = Date.now()) {
   if (topic.category !== 'help') return null;
   const raw = demo.statusOverrides[topic.id] || topic.status || 'open';
   if (raw === 'closed') return 'closed';
@@ -236,33 +266,27 @@ function remainingText(expiresAt, now = Date.now()) {
   return `剩 ${Math.ceil(diff / DAY)} 天`;
 }
 
-function topicMeta(topic, now = Date.now()) {
-  const category = categories.find(({ id }) => id === topic.category);
-  const campus = topic.campus === '全校' ? '全校' : `${topic.campus}校区`;
-  const status = effectiveStatus(topic, now);
-  const badge = category ? `<span class="chip ${category.id}">${icon(category.icon)}${category.name}</span>` : '';
-  const statusPart = statusBadgeHtml(status);
-  const rewardPart = topic.reward ? `<span class="reward-pill">${escapeHtml(topic.reward)}</span>` : '';
-  const ttlPart = status === 'open' && topic.expiresAt ? `<span class="ttl-pill">${icon('clock')}${remainingText(topic.expiresAt, now)}</span>` : '';
-  const imgPart = topic.images?.length ? `<span class="img-hint">${icon('image')}${topic.images.length}</span>` : '';
-  const badges = tagsFor(topic).map(({ id, name, icon: glyph }) => filterButton('tag', id, name, `topic-tag tag-${id}`, icon(glyph)));
-  return `${statusPart}${rewardPart}${badge}<span>${escapeHtml(campus)}</span>${ttlPart}${badges.join('')}${imgPart}${topic.accepted ? `<span class="solved">${icon('check')}已解决</span>` : ''}`;
-}
-
 function tagsFor(topic) {
   return tags.filter(({ id }) => topic.tags?.includes(id));
 }
 
-function repliesFor(topic) {
+function topicMeta(topic, now = Date.now()) {
+  const category = categories.find(({ id }) => id === topic.category);
+  const campus = topic.campus === '全校' ? '全校' : `${topic.campus}校区`;
+  const status = isServerMode ? topic.status : effectiveDemoStatus(topic, now);
+  const pinPart = topic.pinned ? `<span class="pin-badge">${icon('thumbtack')}置顶</span>` : '';
+  const badge = category ? `<span class="chip ${category.id}">${icon(category.icon)}${category.name}</span>` : '';
+  const statusPart = statusBadgeHtml(status);
+  const rewardPart = topic.reward ? `<span class="reward-pill">${escapeHtml(topic.reward)}</span>` : '';
+  const ttlPart = status === 'open' && topic.expiresAt ? `<span class="ttl-pill">${icon('clock')}${remainingText(topic.expiresAt, now)}</span>` : '';
+  const imgCount = topic.imageCount ?? topic.images?.length ?? 0;
+  const imgPart = imgCount > 0 ? `<span class="img-hint">${icon('image')}${imgCount}</span>` : '';
+  const badges = tagsFor(topic).map(({ id, name, icon: glyph }) => filterButton('tag', id, name, `topic-tag tag-${id}`, icon(glyph)));
+  return `${pinPart}${statusPart}${rewardPart}${badge}<span>${escapeHtml(campus)}</span>${ttlPart}${badges.join('')}${imgPart}${topic.accepted ? `<span class="solved">${icon('check')}已解决</span>` : ''}`;
+}
+
+function demoRepliesFor(topic) {
   return [...topic.replies, ...(demo.replies[topic.id] || [])];
-}
-
-function recordTimestamp(record) {
-  return record.createdAt ?? (Number(record.id.match(/^(?:demo|reply)-(\d+)$/)?.[1]) || 0);
-}
-
-function activityOrder(topic) {
-  return recordTimestamp(repliesFor(topic).at(-1) ?? topic);
 }
 
 function activityText(timestamp, now) {
@@ -298,76 +322,122 @@ function choiceInput(option, name, inputAttributes, badgeClass) {
 
 function renderAuthButton() {
   const btn = $('#auth-button');
-  if (demo.user) {
-    btn.innerHTML = `${avatar(demo.user)}<span>${escapeHtml(demo.user.nickname)}</span>`;
-    btn.title = `已通过校内验证 · ${demo.user.campus}校区`;
+  if (currentUser) {
+    btn.innerHTML = `${avatar(currentUser)}<span>${escapeHtml(currentUser.nickname)}</span>`;
+    btn.title = `${currentUser.nickname}（${currentUser.campus}校区）`;
   } else {
-    btn.innerHTML = `${icon('user')}<span>校内验证</span>`;
-    btn.title = '完成轻校内验证后可发帖、回复和查看联系方式';
+    btn.innerHTML = `${icon('user')}<span>${isServerMode ? '登录 / 注册' : '校内验证'}</span>`;
+    btn.title = '完成校内验证登录后可发帖、回复和查看联系方式';
   }
 }
 
-function openAuthDialog(onSuccess = null) {
+function syncAuthTabUI() {
+  const tabsWrap = $('#auth-mode-tabs');
+  tabsWrap.hidden = !isServerMode || Boolean(currentUser);
+  tabsWrap.querySelectorAll('[data-auth-tab]').forEach((btn) => {
+    btn.setAttribute('aria-selected', btn.dataset.authTab === authTab ? 'true' : 'false');
+  });
+
+  const isLogin = isServerMode && authTab === 'login';
+  $('#field-username').hidden = !isServerMode;
+  $('#field-password').hidden = !isServerMode;
+  $('#field-nickname').hidden = isLogin;
+  $('#field-campus').hidden = isLogin;
+  $('#field-verify').hidden = isLogin;
+
+  authForm.elements.username.required = isServerMode;
+  authForm.elements.password.required = isServerMode;
+  authForm.elements.nickname.required = !isLogin;
+  authForm.elements.campus.required = !isLogin;
+  authForm.elements.answer.required = !isLogin;
+
+  if (!isServerMode) {
+    $('#auth-panel-label').textContent = '轻校内验证（演示模式）';
+    $('#auth-title').textContent = '验证同学身份';
+    $('#auth-desc').textContent = '答对一道重电校内常识题即可体验发帖、回复和查看联系方式。';
+    $('#auth-submit').textContent = '完成验证';
+  } else if (isLogin) {
+    $('#auth-panel-label').textContent = '欢迎回来';
+    $('#auth-title').textContent = '登录重电校园站';
+    $('#auth-desc').textContent = '输入你注册过的账号和密码即可登录。';
+    $('#auth-submit').textContent = '立即登录';
+  } else {
+    $('#auth-panel-label').textContent = '轻校内验证注册';
+    $('#auth-title').textContent = '新同学注册';
+    $('#auth-desc').textContent = '答对一道重电校内常识题即可注册账号（答案在服务端校验，防校外广告）。';
+    $('#auth-submit').textContent = '完成注册并登录';
+  }
+}
+
+async function loadAdminQuestions() {
+  const list = $('#admin-questions-list');
+  if (!isServerMode || currentUser?.role !== 'admin') return;
+  try {
+    const data = await api('/api/admin/questions');
+    list.innerHTML = data.questions.map((q) => `
+      <div class="admin-q-item">
+        <div><strong>${escapeHtml(q.question)}</strong><small>答案：${escapeHtml(q.answers.join(' / '))}</small></div>
+        <button type="button" class="text-button danger-text" data-del-question="${q.id}">删除</button>
+      </div>`).join('');
+  } catch (err) {
+    list.innerHTML = `<p class="form-note">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+async function openAuthDialog(onSuccess = null, preferredTab = 'register') {
   afterAuthAction = onSuccess;
   $('#auth-error').hidden = true;
-  if (demo.user) {
-    $('#auth-title').textContent = '已验证同学';
-    $('#auth-desc').hidden = true;
-    $('#auth-fields').hidden = true;
+  if (currentUser) {
+    $('#auth-mode-tabs').hidden = true;
+    $('#auth-form').hidden = true;
     $('#auth-signed-in').hidden = false;
-    $('#auth-profile').innerHTML = `${avatar(demo.user)}<div><strong>${escapeHtml(demo.user.nickname)}</strong><div class="form-note">${escapeHtml(demo.user.campus)}校区 · 已通过校内常识验证</div></div>`;
-    $('#logout-btn').hidden = false;
-    $('#auth-submit').hidden = true;
+    $('#auth-panel-label').textContent = currentUser.role === 'admin' ? '站长账号' : '同学账号';
+    $('#auth-title').textContent = '当前登录状态';
+    const roleTag = currentUser.role === 'admin' ? '<span class="role-tag">管理员</span>' : '';
+    const sub = isServerMode
+      ? `@${escapeHtml(currentUser.username)} · ${escapeHtml(currentUser.campus)}校区`
+      : `${escapeHtml(currentUser.campus)}校区 · 本地演示验证`;
+    $('#auth-profile').innerHTML = `${avatar(currentUser)}<div><strong>${escapeHtml(currentUser.nickname)}</strong>${roleTag}<div class="form-note">${sub}</div></div>`;
+    const isAdmin = isServerMode && currentUser.role === 'admin';
+    $('#admin-questions-panel').hidden = !isAdmin;
+    if (isAdmin) loadAdminQuestions();
   } else {
-    currentVerifyIndex = Math.floor(Math.random() * verifyQuestions.length);
-    $('#verify-question-label').textContent = `校内验证题：${verifyQuestions[currentVerifyIndex].question}`;
-    $('#auth-title').textContent = '验证同学身份';
-    $('#auth-desc').hidden = false;
-    $('#auth-fields').hidden = false;
+    authTab = preferredTab;
+    $('#auth-form').hidden = false;
     $('#auth-signed-in').hidden = true;
-    $('#logout-btn').hidden = true;
-    $('#auth-submit').hidden = false;
     authForm.reset();
+    if (isServerMode) {
+      try {
+        const res = await api('/api/verify-question');
+        if (res.verifyQuestion) currentVerifyQuestion = res.verifyQuestion;
+      } catch { /* fallback to existing */ }
+    }
+    if (currentVerifyQuestion) {
+      $('#verify-question-label').textContent = `校内验证题：${currentVerifyQuestion.question}`;
+    }
     if (filters.campus !== 'all') authForm.elements.campus.value = filters.campus;
+    syncAuthTabUI();
   }
   authDialog.showModal();
-  if (!demo.user) authForm.elements.nickname.focus();
+  if (!currentUser) {
+    (isServerMode ? authForm.elements.username : authForm.elements.nickname).focus();
+  }
 }
 
-function renderFeed() {
-  document.querySelectorAll('[data-filter]').forEach((button) => {
-    button.setAttribute('aria-pressed', filters[button.dataset.filter] === button.dataset.value);
-  });
-  $('#active-only').checked = filters.activeOnly;
-
+function renderTopicRows(items) {
   const now = Date.now();
-  const words = filters.query.toLowerCase().trim().split(/\s+/).filter(Boolean);
   const activeTag = tags.find(({ id }) => id === filters.tag);
-  const matching = [...demo.posts, ...seed].filter((topic) => {
-    const status = effectiveStatus(topic, now);
-    if (filters.activeOnly && status && status !== 'open') return false;
-    const tagNames = tagsFor(topic).map(({ name }) => name);
-    const replyBodies = repliesFor(topic).map((r) => r.body);
-    const haystack = [topic.title, topic.body, topic.reward || '', topic.author, topic.campus, categoryName(topic.category), ...tagNames, ...replyBodies].join(' ').toLowerCase();
-    return (filters.category === 'all' || topic.category === filters.category)
-      && (filters.campus === 'all' || topic.campus === filters.campus)
-      && (!activeTag || topic.tags?.includes(activeTag.id))
-      && (filters.tab !== 'unanswered' || repliesFor(topic).length === 0)
-      && words.every((word) => haystack.includes(word));
-  });
-
-  if (filters.tab === 'popular') matching.sort((first, second) => second.views - first.views);
-  if (filters.tab === 'latest') matching.sort((first, second) => activityOrder(second) - activityOrder(first));
-  const filtered = filters.category !== 'all' || filters.campus !== 'all' || activeTag || filters.tab !== 'latest' || filters.activeOnly || words.length > 0;
-  $('#feed-title').textContent = words.length ? '搜索结果' : filters.category === 'all' ? '校园讨论' : categoryName(filters.category);
+  const words = filters.query.trim();
+  const filtered = filters.category !== 'all' || filters.campus !== 'all' || activeTag || filters.tab !== 'latest' || filters.activeOnly || Boolean(words);
+  $('#feed-title').textContent = words ? '搜索结果' : filters.category === 'all' ? '校园讨论' : categoryName(filters.category);
   const labelParts = [];
   if (filters.campus !== 'all') labelParts.push(`${filters.campus}校区`);
   if (activeTag) labelParts.push(activeTag.name);
-  if (words.length) labelParts.push(`含“${filters.query.trim()}”`);
-  $('#feed-subtitle').textContent = labelParts.length ? `${labelParts.join(' · ')} · ${matching.length} 篇` : `${matching.length} 篇帖子`;
+  if (words) labelParts.push(`含“${words}”`);
+  $('#feed-subtitle').textContent = labelParts.length ? `${labelParts.join(' · ')} · ${items.length} 篇` : `${items.length} 篇帖子`;
   $('#reset-filters').hidden = !filtered;
 
-  if (!matching.length) {
+  if (!items.length) {
     feed.innerHTML = `<div class="empty"><h2>还没有符合条件的帖子</h2><p>试试放宽筛选条件，或者发一条新的校园讨论 / 互助帖。</p>
       <button class="button secondary" data-reset type="button">查看全部讨论</button></div>`;
     return;
@@ -382,52 +452,112 @@ function renderFeed() {
       <th scope="col" class="number-column views-column">浏览</th>
       <th scope="col" class="time-column desktop-column">活动</th>
     </tr></thead>
-    <tbody>${matching.map((topic) => {
-      const replies = repliesFor(topic);
-      const latest = replies.at(-1);
-      const status = effectiveStatus(topic, now);
-      const inactive = status === 'closed' || status === 'expired';
-      const people = [...new Map([topic, ...replies].map((person) => [person.author, person])).values()].slice(0, 3);
+    <tbody>${items.map((topic) => {
+      const inactive = topic.status === 'closed' || topic.status === 'expired';
+      const people = topic.participants || [];
       const names = escapeHtml(people.map((person) => person.author).join('、'));
-      const activityLabel = latest ? '查看最新回复' : '查看主题';
-      const timestamp = recordTimestamp(latest ?? topic);
+      const activityLabel = topic.latestReplyId ? '查看最新回复' : '查看主题';
+      const timestamp = topic.lastActivityAt || topic.createdAt || 0;
       const dateLabel = timestamp ? fullDate.format(timestamp) : '时间未知';
       const time = timestamp ? `<time datetime="${new Date(timestamp).toISOString()}" data-activity="${timestamp}">${activityText(timestamp, now)}</time>` : '—';
-      const activity = `<a class="activity-link" href="${topicHref(topic.id, latest?.id)}" title="${dateLabel}" aria-label="${activityLabel}：${escapeHtml(topic.title)}，${dateLabel}">${time}</a>`;
+      const activity = `<a class="activity-link" href="${topicHref(topic.id, topic.latestReplyId)}" title="${dateLabel}" aria-label="${activityLabel}：${escapeHtml(topic.title)}，${dateLabel}">${time}</a>`;
       return `<tr class="topic-row${inactive ? ' is-inactive' : ''}">
         <th scope="row">
           <a class="topic-title" href="${topicHref(topic.id)}">${escapeHtml(topic.title)}</a>
           <span class="topic-meta">${topicMeta(topic, now)}<span class="mobile-time">${activity}</span></span>
         </th>
         <td class="people-column"><span class="participant-list" title="${names}"><span class="visually-hidden">${names}</span>${people.map(avatar).join('')}</span></td>
-        <td class="reply-count"><span class="reply-glyph">${icon('chat')}<span class="visually-hidden">回复数：</span></span>${replies.length}</td>
+        <td class="reply-count"><span class="reply-glyph">${icon('chat')}<span class="visually-hidden">回复数：</span></span>${topic.replyCount}</td>
         <td class="views-column">${topic.views}</td>
         <td class="desktop-column">${activity}</td>
       </tr>`;
     }).join('')}</tbody></table>`;
 }
 
+async function renderFeed() {
+  document.querySelectorAll('[data-filter]').forEach((button) => {
+    button.setAttribute('aria-pressed', filters[button.dataset.filter] === button.dataset.value);
+  });
+  $('#active-only').checked = filters.activeOnly;
+
+  if (isServerMode) {
+    try {
+      const params = new URLSearchParams({
+        category: filters.category,
+        campus: filters.campus,
+        tag: filters.tag,
+        tab: filters.tab,
+        activeOnly: filters.activeOnly ? '1' : '0',
+        q: filters.query.trim(),
+      });
+      const data = await api(`/api/topics?${params.toString()}`);
+      renderTopicRows(data.topics);
+    } catch (err) {
+      feed.innerHTML = `<div class="empty"><h2>加载帖子列表失败</h2><p>${escapeHtml(err.message)}</p></div>`;
+    }
+    return;
+  }
+
+  // Fallback local demo mode
+  const now = Date.now();
+  const words = filters.query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const activeTag = tags.find(({ id }) => id === filters.tag);
+  const matching = [...demo.posts, ...seed].filter((topic) => {
+    const status = effectiveDemoStatus(topic, now);
+    if (filters.activeOnly && status && status !== 'open') return false;
+    const tagNames = tagsFor(topic).map(({ name }) => name);
+    const replyBodies = demoRepliesFor(topic).map((r) => r.body);
+    const haystack = [topic.title, topic.body, topic.reward || '', topic.author, topic.campus, categoryName(topic.category), ...tagNames, ...replyBodies].join(' ').toLowerCase();
+    return (filters.category === 'all' || topic.category === filters.category)
+      && (filters.campus === 'all' || topic.campus === filters.campus)
+      && (!activeTag || topic.tags?.includes(activeTag.id))
+      && (filters.tab !== 'unanswered' || demoRepliesFor(topic).length === 0)
+      && words.every((word) => haystack.includes(word));
+  });
+
+  const normalized = matching.map((topic) => {
+    const replies = demoRepliesFor(topic);
+    const latest = replies.at(-1);
+    const people = [...new Map([topic, ...replies].map((p) => [p.author, p])).values()].slice(0, 3);
+    return {
+      ...topic,
+      status: effectiveDemoStatus(topic, now),
+      replyCount: replies.length,
+      latestReplyId: latest?.id || null,
+      lastActivityAt: (latest || topic).createdAt || 0,
+      participants: people,
+    };
+  });
+
+  if (filters.tab === 'popular') {
+    normalized.sort((a, b) => (Number(Boolean(b.pinned)) - Number(Boolean(a.pinned))) || (b.views - a.views));
+  } else {
+    normalized.sort((a, b) => (Number(Boolean(b.pinned)) - Number(Boolean(a.pinned))) || (b.lastActivityAt - a.lastActivityAt));
+  }
+  renderTopicRows(normalized);
+}
+
 function authorLine(person) {
-  const timestamp = recordTimestamp(person);
-  const date = timestamp ? fullDate.format(timestamp) : (person.time || '时间未知');
+  const date = person.createdAt ? fullDate.format(person.createdAt) : '时间未知';
   return `<div class="author">${avatar(person)}<strong>${escapeHtml(person.author)}</strong><span>${escapeHtml(date)}</span></div>`;
 }
 
 function renderHelpPanel(topic, now) {
   if (topic.category !== 'help') return '';
-  const status = effectiveStatus(topic, now);
-  const canToggle = status === 'open' || status === 'closed';
+  const status = isServerMode ? topic.status : effectiveDemoStatus(topic, now);
+  const canToggle = (status === 'open' || status === 'closed') && (!isServerMode || topic.canManage);
   const toggleBtn = canToggle
     ? `<button class="button secondary small" id="toggle-status-btn" type="button">${status === 'open' ? '标记为已完成' : '重新开启'}</button>`
     : '';
 
+  const hasContact = isServerMode ? topic.hasContact : Boolean(topic.contact);
   let contactHtml = '';
-  if (topic.contact) {
+  if (hasContact) {
     if (status !== 'open') {
       contactHtml = `<div class="contact-box">${icon('lock')}<span>帖子已${status === 'closed' ? '完成' : '过期'}，联系方式已自动隐藏</span></div>`;
-    } else if (!demo.user) {
-      contactHtml = `<div class="contact-box">${icon('lock')}<span>联系方式仅校内验证登录后可见</span><button class="button secondary small" id="reveal-contact-btn" type="button">校内验证后查看</button></div>`;
-    } else {
+    } else if (!currentUser) {
+      contactHtml = `<div class="contact-box">${icon('lock')}<span>联系方式仅校内验证登录后由服务器下发</span><button class="button secondary small" id="reveal-contact-btn" type="button">登录 / 验证查看</button></div>`;
+    } else if (topic.contact) {
       contactHtml = `<div class="contact-box">${icon('lock')}<span>联系方式：</span><span class="contact-value">${escapeHtml(topic.contact)}</span><button class="button secondary small" id="copy-contact-btn" type="button">复制</button></div>`;
     }
   }
@@ -445,15 +575,25 @@ function renderHelpPanel(topic, now) {
   </div>`;
 }
 
-function renderTopic(topic) {
+function renderTopicView(topic) {
   const now = Date.now();
-  const replies = repliesFor(topic);
+  const replies = isServerMode ? (topic.replies || []) : demoRepliesFor(topic);
   const imagesHtml = topic.images?.length
-    ? `<div class="topic-images">${topic.images.map((src, i) => `<button type="button" class="topic-image-btn" data-lightbox="${i}" aria-label="查看附图 ${i + 1}"><img src="${src}" alt="帖子附图 ${i + 1}"></button>`).join('')}</div>`
+    ? `<div class="topic-images">${topic.images.map((src, i) => `<button type="button" class="topic-image-btn" data-lightbox="${i}" aria-label="查看附图 ${i + 1}"><img src="${escapeHtml(src)}" alt="帖子附图 ${i + 1}"></button>`).join('')}</div>`
+    : '';
+
+  const adminBar = isServerMode && (topic.canPin || topic.canManage)
+    ? `<div class="topic-admin-actions">
+        ${topic.canPin ? `<button class="button secondary small" id="pin-topic-btn" type="button">${icon('thumbtack')}<span>${topic.pinned ? '取消置顶' : '置顶'}</span></button>` : ''}
+        ${topic.canManage ? `<button class="button secondary small danger-text" id="delete-topic-btn" type="button">${icon('trash')}<span>删除帖子</span></button>` : ''}
+      </div>`
     : '';
 
   topicPage.innerHTML = `
-    <a class="back-link" href="#">${icon('back')}返回讨论</a>
+    <div class="topic-top-bar">
+      <a class="back-link" href="#">${icon('back')}返回讨论</a>
+      ${adminBar}
+    </div>
     <article class="topic-card">
       <h1>${escapeHtml(topic.title)}</h1>
       <div class="topic-meta">${topicMeta(topic, now)}</div>
@@ -464,20 +604,32 @@ function renderTopic(topic) {
     </article>
     <section class="replies" aria-labelledby="reply-heading">
       <h2 id="reply-heading">${replies.length} 条回复</h2>
-      ${replies.length ? replies.map((reply) => `
-        <article id="reply-anchor-${escapeHtml(reply.id)}" class="reply${topic.accepted === reply.id ? ' solved-reply' : ''}" tabindex="-1">
-          ${authorLine(reply)}
-          ${topic.accepted === reply.id ? `<div class="topic-meta"><span class="solved">${icon('check')}采纳答案</span></div>` : ''}
+      ${replies.length ? replies.map((reply) => {
+        const isAccepted = topic.accepted === reply.id;
+        const acceptBtn = isServerMode && topic.canManage
+          ? `<button type="button" class="text-button" data-accept-reply="${escapeHtml(reply.id)}">${isAccepted ? '取消采纳' : '采纳答案'}</button>`
+          : '';
+        const delBtn = isServerMode && reply.canDelete
+          ? `<button type="button" class="text-button danger-text" data-delete-reply="${escapeHtml(reply.id)}">删除</button>`
+          : '';
+        return `
+        <article id="reply-anchor-${escapeHtml(reply.id)}" class="reply${isAccepted ? ' solved-reply' : ''}" tabindex="-1">
+          <div class="author-row">
+            ${authorLine(reply)}
+            ${acceptBtn || delBtn ? `<div class="reply-actions">${acceptBtn}${delBtn}</div>` : ''}
+          </div>
+          ${isAccepted ? `<div class="topic-meta"><span class="solved">${icon('check')}采纳答案</span></div>` : ''}
           <p>${escapeHtml(reply.body)}</p>
-        </article>`).join('') : '<p class="topic-empty">还没有人回复。可以分享你的建议或接单沟通。</p>'}
+        </article>`;
+      }).join('') : '<p class="topic-empty">还没有人回复。可以分享你的建议或接单沟通。</p>'}
       <form id="reply-form" class="reply-form">
-        <label>写回复<textarea name="body" required maxlength="1000" rows="3" placeholder="${demo.user ? `以「${escapeHtml(demo.user.nickname)}」身份回复...` : '完成校内验证后即可发送回复'}"></textarea></label>
+        <label>写回复<textarea name="body" required maxlength="1000" rows="3" placeholder="${currentUser ? `以「${escapeHtml(currentUser.nickname)}」身份回复...` : '完成校内验证登录后即可发送回复'}"></textarea></label>
         <button class="button primary" type="submit">发送回复</button>
       </form>
     </section>`;
 
   $('#reveal-contact-btn')?.addEventListener('click', () => {
-    openAuthDialog(() => renderTopic(topic));
+    openAuthDialog(() => renderRoute(false));
   });
 
   $('#copy-contact-btn')?.addEventListener('click', async () => {
@@ -489,19 +641,79 @@ function renderTopic(topic) {
     }
   });
 
-  $('#toggle-status-btn')?.addEventListener('click', () => {
-    const toggle = () => {
-      const current = effectiveStatus(topic);
-      demo.statusOverrides[topic.id] = current === 'open' ? 'closed' : 'open';
-      saveDemo();
-      renderTopic(topic);
-      showToast(demo.statusOverrides[topic.id] === 'closed' ? '已标记为完成，联系方式已自动隐藏' : '已重新开启互助帖');
+  $('#toggle-status-btn')?.addEventListener('click', async () => {
+    const toggle = async () => {
+      const currentStatus = isServerMode ? topic.status : effectiveDemoStatus(topic);
+      const nextStatus = currentStatus === 'open' ? 'closed' : 'open';
+      if (isServerMode) {
+        try {
+          await api(`/api/topics/${encodeURIComponent(topic.id)}/status`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: nextStatus }),
+          });
+          showToast(nextStatus === 'closed' ? '已标记为完成，联系方式已自动隐藏' : '已重新开启互助帖');
+          await renderRoute(false);
+        } catch (err) {
+          showToast(err.message);
+        }
+      } else {
+        demo.statusOverrides[topic.id] = nextStatus;
+        saveDemo();
+        renderTopicView(topic);
+        showToast(nextStatus === 'closed' ? '已标记为完成，联系方式已自动隐藏' : '已重新开启互助帖');
+      }
     };
-    if (!demo.user) {
-      openAuthDialog(toggle);
-    } else {
-      toggle();
+    if (!currentUser) openAuthDialog(toggle);
+    else toggle();
+  });
+
+  $('#pin-topic-btn')?.addEventListener('click', async () => {
+    try {
+      const res = await api(`/api/topics/${encodeURIComponent(topic.id)}/pin`, { method: 'PATCH' });
+      showToast(res.pinned ? '帖子已置顶' : '已取消置顶');
+      await renderRoute(false);
+    } catch (err) {
+      showToast(err.message);
     }
+  });
+
+  $('#delete-topic-btn')?.addEventListener('click', async () => {
+    if (!window.confirm('确定要删除这篇帖子吗？删除后无法恢复。')) return;
+    try {
+      await api(`/api/topics/${encodeURIComponent(topic.id)}`, { method: 'DELETE' });
+      showToast('帖子已删除');
+      showFeed();
+    } catch (err) {
+      showToast(err.message);
+    }
+  });
+
+  topicPage.querySelectorAll('[data-accept-reply]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        const res = await api(`/api/topics/${encodeURIComponent(topic.id)}/accept`, {
+          method: 'POST',
+          body: JSON.stringify({ replyId: btn.dataset.acceptReply }),
+        });
+        showToast(res.accepted ? '已采纳为最佳答案' : '已取消采纳');
+        await renderRoute(false);
+      } catch (err) {
+        showToast(err.message);
+      }
+    });
+  });
+
+  topicPage.querySelectorAll('[data-delete-reply]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!window.confirm('确定删除这条回复？')) return;
+      try {
+        await api(`/api/replies/${encodeURIComponent(btn.dataset.deleteReply)}`, { method: 'DELETE' });
+        showToast('回复已删除');
+        await renderRoute(false);
+      } catch (err) {
+        showToast(err.message);
+      }
+    });
   });
 
   topicPage.querySelectorAll('[data-lightbox]').forEach((btn) => {
@@ -513,57 +725,94 @@ function renderTopic(topic) {
     });
   });
 
-  $('#reply-form').addEventListener('submit', (event) => {
+  $('#reply-form').addEventListener('submit', async (event) => {
     event.preventDefault();
-    const input = event.currentTarget.elements.body;
+    const form = event.currentTarget;
+    const input = form.elements.body;
     const body = input.value.trim();
     if (!body) {
       input.setCustomValidity('请填写回复内容。');
       input.reportValidity();
       return;
     }
-    const postReply = () => {
-      demo.replies[topic.id] ??= [];
-      const createdAt = Date.now();
-      const author = demo.user?.nickname || '体验同学';
-      const initial = demo.user?.initial || author.slice(0, 1);
-      demo.replies[topic.id].push({ id: `reply-${createdAt}`, author, initial, color: demo.user?.color || 'green', createdAt, body });
-      const saved = saveDemo();
-      renderTopic(topic);
-      $('#reply-form').elements.body.focus({ preventScroll: true });
-      showToast(saved ? '回复已保存到当前浏览器' : '回复仅保留在当前页面');
+    const submitReply = async () => {
+      if (isServerMode) {
+        try {
+          await api(`/api/topics/${encodeURIComponent(topic.id)}/replies`, {
+            method: 'POST',
+            body: JSON.stringify({ body }),
+          });
+          showToast('回复已发布');
+          await renderRoute(false);
+        } catch (err) {
+          showToast(err.message);
+        }
+      } else {
+        demo.replies[topic.id] ??= [];
+        const createdAt = Date.now();
+        const author = currentUser?.nickname || '体验同学';
+        demo.replies[topic.id].push({
+          id: `reply-${createdAt}`,
+          author,
+          initial: currentUser?.initial || author.slice(0, 1),
+          color: currentUser?.color || 'violet',
+          createdAt,
+          body,
+        });
+        const saved = saveDemo();
+        renderTopicView(topic);
+        showToast(saved ? '回复已保存到当前浏览器' : '回复仅保留在当前页面');
+      }
     };
-    if (!demo.user) {
-      openAuthDialog(postReply);
-    } else {
-      postReply();
-    }
+    if (!currentUser) openAuthDialog(submitReply);
+    else submitReply();
   });
 }
 
-function renderRoute(moveFocus = false) {
-  const [, id, replyId] = location.hash.match(/^#topic\/([a-z0-9-]+)(?:\/([a-z0-9-]+))?$/) ?? [];
-  const topic = [...demo.posts, ...seed].find((item) => item.id === id);
+async function renderRoute(moveFocus = false) {
+  const [, id, replyId] = location.hash.match(/^#topic\/([a-zA-Z0-9-]+)(?:\/([a-zA-Z0-9-]+))?$/) ?? [];
   document.body.classList.toggle('is-topic-view', Boolean(id));
   $('#feed-page').hidden = Boolean(id);
   topicPage.hidden = !id;
-  if (topic) {
-    renderTopic(topic);
-    document.title = `${topic.title} · 重电校园站`;
-    const reply = replyId && document.getElementById(`reply-anchor-${replyId}`);
-    if (reply) {
-      reply.classList.add('reply-target');
-      reply.scrollIntoView({ block: 'start' });
-      if (moveFocus) reply.focus({ preventScroll: true });
-      return;
-    }
-  } else if (id) {
-    topicPage.innerHTML = `<a class="back-link" href="#">${icon('back')}返回讨论</a><section class="topic-card"><h1>当前浏览器没有这篇帖子</h1><p>演示中发布的内容只能在发布时使用的浏览器中查看。</p></section>`;
-    document.title = '帖子详情 · 重电校园站';
-  } else {
-    renderFeed();
+
+  if (!id) {
     document.title = '重电校园站 · 校园问答与互助社区';
+    await renderFeed();
+  } else if (isServerMode) {
+    try {
+      const data = await api(`/api/topics/${encodeURIComponent(id)}`);
+      const topic = data.topic;
+      renderTopicView(topic);
+      document.title = `${topic.title} · 重电校园站`;
+      const reply = replyId && document.getElementById(`reply-anchor-${replyId}`);
+      if (reply) {
+        reply.classList.add('reply-target');
+        reply.scrollIntoView({ block: 'start' });
+        if (moveFocus) reply.focus({ preventScroll: true });
+        return;
+      }
+    } catch (err) {
+      topicPage.innerHTML = `<a class="back-link" href="#">${icon('back')}返回讨论</a><section class="topic-card"><h1>无法打开这篇帖子</h1><p>${escapeHtml(err.message)}</p></section>`;
+      document.title = '帖子详情 · 重电校园站';
+    }
+  } else {
+    const topic = [...demo.posts, ...seed].find((item) => item.id === id);
+    if (topic) {
+      renderTopicView(topic);
+      document.title = `${topic.title} · 重电校园站`;
+      const reply = replyId && document.getElementById(`reply-anchor-${replyId}`);
+      if (reply) {
+        reply.classList.add('reply-target');
+        reply.scrollIntoView({ block: 'start' });
+        if (moveFocus) reply.focus({ preventScroll: true });
+        return;
+      }
+    } else {
+      topicPage.innerHTML = `<a class="back-link" href="#">${icon('back')}返回讨论</a><section class="topic-card"><h1>当前浏览器没有这篇帖子</h1><p>演示中发布的内容只能在发布时使用的浏览器中查看。</p></section>`;
+      document.title = '帖子详情 · 重电校园站';
+    }
   }
+
   if (moveFocus) {
     window.scrollTo(0, 0);
     $('#main').focus({ preventScroll: true });
@@ -609,7 +858,7 @@ function compressImage(file) {
         canvas.height = Math.max(1, Math.round(img.height * scale));
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.78));
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
       };
       img.src = reader.result;
     };
@@ -650,17 +899,14 @@ function openComposer() {
   const launch = () => {
     if (filters.category !== 'all') postForm.elements.category.value = filters.category;
     if (filters.campus !== 'all') postForm.elements.campus.value = filters.campus;
-    else if (demo.user?.campus) postForm.elements.campus.value = demo.user.campus;
+    else if (currentUser?.campus) postForm.elements.campus.value = currentUser.campus;
     syncComposerHelpFields();
     renderUploadPreviews();
     composer.showModal();
     postForm.elements.title.focus();
   };
-  if (!demo.user) {
-    openAuthDialog(launch);
-  } else {
-    launch();
-  }
+  if (!currentUser) openAuthDialog(launch);
+  else launch();
 }
 
 $('#categories').innerHTML = categories.map(({ id, name, icon: glyph }) => filterButton('category', id, name, 'nav-button', icon(glyph))).join('');
@@ -670,9 +916,7 @@ $('#tabs').innerHTML = tabs.map(({ id, name }) => filterButton('tab', id, name, 
 $('#post-categories').innerHTML = categories.slice(1).map((category, index) => choiceInput(category, 'category', `type="radio" required${index === 0 ? ' checked' : ''}`, `chip ${category.id}`)).join('');
 $('#post-tags').innerHTML = tags.map((tag) => choiceInput(tag, 'tags', 'type="checkbox"', `topic-tag tag-${tag.id}`)).join('');
 postForm.elements.campus.innerHTML = [...campuses.slice(1).map(({ name }) => name), '全校'].map((name) => `<option>${name}</option>`).join('');
-authForm.elements.campus.innerHTML = campuses.slice(1).map(({ name }) => `<option>${name}</option>`).join('');
-
-renderAuthButton();
+authForm.elements.campus.innerHTML = campuses.slice(1).map(({ name }) => name).map((name) => `<option>${name}</option>`).join('');
 
 feed.addEventListener('click', (event) => {
   if (!window.matchMedia('(max-width: 640px)').matches || event.button !== 0
@@ -682,7 +926,7 @@ feed.addEventListener('click', (event) => {
   if (title) location.hash = title.hash;
 });
 
-document.addEventListener('click', (event) => {
+document.addEventListener('click', async (event) => {
   const filter = event.target.closest('[data-filter]');
   if (filter) {
     const { filter: key, value } = filter.dataset;
@@ -697,16 +941,31 @@ document.addEventListener('click', (event) => {
     resetFilters();
     $('#tabs [data-value="latest"]').focus({ preventScroll: true });
   }
-  if (event.target.closest('[data-compose]')) {
-    openComposer();
+  if (event.target.closest('[data-compose]')) openComposer();
+  if (event.target.closest('[data-auth]')) openAuthDialog();
+
+  const tabBtn = event.target.closest('[data-auth-tab]');
+  if (tabBtn) {
+    authTab = tabBtn.dataset.authTab;
+    $('#auth-error').hidden = true;
+    syncAuthTabUI();
   }
-  if (event.target.closest('[data-auth]')) {
-    openAuthDialog();
-  }
+
   const removeBtn = event.target.closest('[data-remove-img]');
   if (removeBtn) {
     pendingImages.splice(Number(removeBtn.dataset.removeImg), 1);
     renderUploadPreviews();
+  }
+
+  const delQBtn = event.target.closest('[data-del-question]');
+  if (delQBtn) {
+    try {
+      await api(`/api/admin/questions/${delQBtn.dataset.delQuestion}`, { method: 'DELETE' });
+      showToast('已删除验证题');
+      loadAdminQuestions();
+    } catch (err) {
+      showToast(err.message);
+    }
   }
 });
 
@@ -747,7 +1006,8 @@ $('#search').addEventListener('submit', (event) => {
 });
 query.addEventListener('input', () => {
   filters.query = query.value;
-  showFeed();
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => showFeed(), isServerMode ? 180 : 0);
 });
 document.addEventListener('keydown', (event) => {
   const typing = event.target.matches('input, textarea, select, [contenteditable]');
@@ -761,27 +1021,98 @@ $('#close-composer').addEventListener('click', () => composer.close());
 $('#cancel-post').addEventListener('click', () => composer.close());
 $('#close-auth').addEventListener('click', () => authDialog.close());
 $('#cancel-auth').addEventListener('click', () => authDialog.close());
+$('#close-signed-auth').addEventListener('click', () => authDialog.close());
 $('#close-lightbox').addEventListener('click', () => lightbox.close());
 lightbox.addEventListener('click', (event) => {
   if (event.target === lightbox) lightbox.close();
 });
 
-$('#logout-btn').addEventListener('click', () => {
-  demo.user = null;
-  saveDemo();
+$('#logout-btn').addEventListener('click', async () => {
+  if (isServerMode) {
+    try { await api('/api/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
+  } else {
+    demo.user = null;
+    saveDemo();
+  }
+  currentUser = null;
   renderAuthButton();
   authDialog.close();
-  renderRoute();
-  showToast('已退出校内验证状态');
+  renderRoute(false);
+  showToast('已退出登录');
 });
 
-authForm.addEventListener('submit', (event) => {
+$('#admin-question-form').addEventListener('submit', async (event) => {
   event.preventDefault();
+  const form = event.currentTarget;
+  const question = form.elements.question.value.trim();
+  const answers = form.elements.answers.value.trim();
+  if (!question || !answers) return;
+  try {
+    await api('/api/admin/questions', {
+      method: 'POST',
+      body: JSON.stringify({ question, answers }),
+    });
+    form.reset();
+    showToast('新验证题已加入题库');
+    loadAdminQuestions();
+  } catch (err) {
+    showToast(err.message);
+  }
+});
+
+authForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const err = $('#auth-error');
+  err.hidden = true;
+  const submitBtn = $('#auth-submit');
+
+  if (isServerMode) {
+    submitBtn.disabled = true;
+    try {
+      let data;
+      if (authTab === 'login') {
+        data = await api('/api/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: authForm.elements.username.value.trim(),
+            password: authForm.elements.password.value,
+          }),
+        });
+      } else {
+        data = await api('/api/auth/register', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: authForm.elements.username.value.trim(),
+            password: authForm.elements.password.value,
+            nickname: authForm.elements.nickname.value.trim(),
+            campus: authForm.elements.campus.value,
+            questionId: currentVerifyQuestion?.id,
+            answer: authForm.elements.answer.value.trim(),
+          }),
+        });
+      }
+      currentUser = data.user;
+      renderAuthButton();
+      authDialog.close();
+      showToast(`欢迎你，${currentUser.nickname}（${currentUser.campus}校区）`);
+      const next = afterAuthAction;
+      afterAuthAction = null;
+      if (next) next();
+      else renderRoute(false);
+    } catch (e) {
+      err.textContent = e.message;
+      err.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+    }
+    return;
+  }
+
+  // Fallback local demo mode
   const nickname = authForm.elements.nickname.value.trim();
   const campus = authForm.elements.campus.value;
   const answer = authForm.elements.answer.value.trim();
-  const err = $('#auth-error');
-  const q = verifyQuestions[currentVerifyIndex];
+  const q = demoVerifyQuestions[0];
   if (!nickname) {
     err.textContent = '请填写一个昵称。';
     err.hidden = false;
@@ -793,10 +1124,10 @@ authForm.addEventListener('submit', (event) => {
     authForm.elements.answer.focus();
     return;
   }
-  err.hidden = true;
-  const colors = ['green', 'blue', 'gold', 'violet', 'rose'];
+  const colors = ['violet', 'blue', 'gold', 'green', 'rose'];
   const color = colors[nickname.charCodeAt(0) % colors.length];
   demo.user = { nickname, initial: nickname.slice(0, 1), campus, color, verifiedAt: Date.now() };
+  currentUser = demo.user;
   saveDemo();
   renderAuthButton();
   authDialog.close();
@@ -804,10 +1135,10 @@ authForm.addEventListener('submit', (event) => {
   const next = afterAuthAction;
   afterAuthAction = null;
   if (next) next();
-  else renderRoute();
+  else renderRoute(false);
 });
 
-postForm.addEventListener('submit', (event) => {
+postForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   const { title, body, category, campus, reward, ttl, contact } = postForm.elements;
   const blank = [title, body].find((input) => !input.value.trim());
@@ -816,21 +1147,56 @@ postForm.addEventListener('submit', (event) => {
     blank.reportValidity();
     return;
   }
+  const submitBtn = $('#submit-post-btn');
+  const selectedTags = new FormData(postForm).getAll('tags');
+
+  if (isServerMode) {
+    submitBtn.disabled = true;
+    try {
+      const res = await api('/api/topics', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: title.value.trim(),
+          body: body.value.trim(),
+          category: category.value,
+          campus: campus.value,
+          tags: selectedTags,
+          reward: reward.value.trim(),
+          ttl: Number(ttl.value),
+          contact: contact.value.trim(),
+          images: pendingImages,
+        }),
+      });
+      pendingImages = [];
+      postForm.reset();
+      composer.close();
+      resetFilters();
+      location.hash = topicHref(res.id);
+      showToast('帖子已发布');
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      submitBtn.disabled = false;
+    }
+    return;
+  }
+
+  // Fallback local demo mode
   const createdAt = Date.now();
   const isHelp = category.value === 'help';
   const ttlHours = Number(ttl.value);
-  const author = demo.user?.nickname || '体验同学';
+  const author = currentUser?.nickname || '体验同学';
   const topic = {
     id: `demo-${createdAt}`,
     title: title.value.trim(),
     body: body.value.trim(),
     category: category.value,
     campus: campus.value,
-    tags: new FormData(postForm).getAll('tags'),
+    tags: selectedTags,
     images: [...pendingImages],
     author,
-    initial: demo.user?.initial || author.slice(0, 1),
-    color: demo.user?.color || 'green',
+    initial: currentUser?.initial || author.slice(0, 1),
+    color: currentUser?.color || 'violet',
     createdAt,
     views: 0,
     replies: [],
@@ -848,9 +1214,35 @@ postForm.addEventListener('submit', (event) => {
   composer.close();
   resetFilters();
   location.hash = topicHref(topic.id);
-  showToast(saved ? '帖子已保存到当前浏览器' : '帖子仅保留在当前页面（图片较大可能超出本地缓存）');
+  showToast(saved ? '帖子已保存到当前浏览器' : '帖子仅保留在当前页面');
 });
 
 window.addEventListener('hashchange', () => renderRoute(true));
 window.setInterval(refreshActivity, 30_000);
-renderRoute();
+
+async function boot() {
+  if (location.protocol.startsWith('http')) {
+    try {
+      const data = await api('/api/bootstrap');
+      if (data.mode === 'server') {
+        isServerMode = true;
+        currentUser = data.user || null;
+        if (data.verifyQuestion) currentVerifyQuestion = data.verifyQuestion;
+      }
+    } catch {
+      isServerMode = false;
+    }
+  }
+  if (!isServerMode) {
+    currentUser = demo.user;
+    $('#mode-badge').textContent = '演示原型';
+    $('#composer-note').textContent = '演示模式：内容保存在当前浏览器。请勿发布代课、代做作业等违规信息。';
+  } else {
+    $('#mode-badge').textContent = '在线社区';
+    $('#composer-note').textContent = '图片会自动压缩上传；请勿发布代课、代做作业等违规信息。';
+  }
+  renderAuthButton();
+  await renderRoute();
+}
+
+boot();

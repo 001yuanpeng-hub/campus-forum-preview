@@ -1,0 +1,13 @@
+{
+  "name": "cqetc-campus-forum",
+  "version": "0.2.0",
+  "description": "重电校园站 · 面向重庆电子科技职业大学同学的校园问答与互助社区",
+  "private": true,
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  }
+}
