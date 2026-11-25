@@ -366,17 +366,145 @@ function renderAuthButton() {
   if (!currentUser) updateNotifBadge(0);
 }
 
+function inspectPassword(password) {
+  const value = String(password || '');
+  const checks = {
+    len: value.length >= 8 && value.length <= 64,
+    noSpace: !/\s/.test(value),
+    letter: /[A-Za-z]/.test(value),
+    digit: /\d/.test(value),
+    symbol: /[^A-Za-z0-9\s]/.test(value),
+  };
+  let error = null;
+  if (!value || value.length < 8 || value.length > 64) {
+    error = '密码至少 8 位（8–64 个字符）。';
+  } else if (!checks.noSpace) {
+    error = '密码不能包含空格。';
+  } else if (!checks.letter || !checks.digit || !checks.symbol) {
+    const missing = [];
+    if (!checks.letter) missing.push('字母');
+    if (!checks.digit) missing.push('数字');
+    if (!checks.symbol) missing.push('符号');
+    error = `还缺少：${missing.join('、')}（需同时包含字母、数字和符号）。`;
+  }
+  return { checks, error, valid: !error };
+}
+
 function validatePasswordStrength(password) {
-  if (!password || password.length < 8 || password.length > 64) {
-    return '密码长度需在 8–64 位之间。';
+  return inspectPassword(password).error;
+}
+
+function updateLivePasswordUI({ input, confirmInput, rulesEl, msgEl, confirmMsgEl, active = true }) {
+  if (!input) return;
+  if (!active) {
+    input.classList.remove('is-invalid', 'is-valid');
+    if (confirmInput) confirmInput.classList.remove('is-invalid', 'is-valid');
+    if (rulesEl) rulesEl.hidden = true;
+    if (msgEl) msgEl.hidden = true;
+    if (confirmMsgEl) confirmMsgEl.hidden = true;
+    return;
   }
-  if (/\s/.test(password)) {
-    return '密码不能包含空格。';
+
+  if (rulesEl) rulesEl.hidden = false;
+  const val = input.value;
+  const { checks, error, valid } = inspectPassword(val);
+  const started = val.length > 0;
+
+  if (rulesEl) {
+    rulesEl.querySelectorAll('[data-rule]').forEach((el) => {
+      const rule = el.dataset.rule;
+      const met = rule === 'len' ? (checks.len && checks.noSpace) : Boolean(checks[rule]);
+      el.classList.toggle('is-met', started && met);
+      el.classList.toggle('is-unmet', started && !met);
+    });
   }
-  if (!/[A-Za-z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9\s]/.test(password)) {
-    return '请使用至少 8 个字符，且同时包含字母、数字和符号的组合。';
+
+  input.classList.toggle('is-valid', started && valid);
+  input.classList.toggle('is-invalid', started && !valid);
+
+  if (msgEl) {
+    if (!started) {
+      msgEl.hidden = true;
+    } else if (!valid) {
+      msgEl.textContent = error;
+      msgEl.className = 'field-feedback is-error';
+      msgEl.hidden = false;
+    } else {
+      msgEl.textContent = '✓ 密码格式符合要求';
+      msgEl.className = 'field-feedback is-ok';
+      msgEl.hidden = false;
+    }
   }
-  return null;
+
+  if (confirmInput && confirmMsgEl) {
+    const cVal = confirmInput.value;
+    if (!cVal) {
+      confirmInput.classList.remove('is-invalid', 'is-valid');
+      confirmMsgEl.hidden = true;
+    } else if (cVal !== val) {
+      confirmInput.classList.add('is-invalid');
+      confirmInput.classList.remove('is-valid');
+      confirmMsgEl.textContent = '两次输入的密码不一致，请重新核对。';
+      confirmMsgEl.className = 'field-feedback is-error';
+      confirmMsgEl.hidden = false;
+    } else {
+      confirmInput.classList.remove('is-invalid');
+      confirmInput.classList.add('is-valid');
+      confirmMsgEl.textContent = '✓ 两次密码一致';
+      confirmMsgEl.className = 'field-feedback is-ok';
+      confirmMsgEl.hidden = false;
+    }
+  }
+}
+
+function updateLiveUsernameUI() {
+  const input = authForm.elements.username;
+  const msg = $('#reg-username-msg');
+  if (!isServerMode || authTab === 'login') {
+    input.classList.remove('is-invalid', 'is-valid');
+    msg.hidden = true;
+    return;
+  }
+  const val = input.value.trim();
+  if (!val) {
+    input.classList.remove('is-invalid', 'is-valid');
+    msg.hidden = true;
+    return;
+  }
+  const ok = /^[a-zA-Z0-9_]{3,20}$/.test(val);
+  input.classList.toggle('is-valid', ok);
+  input.classList.toggle('is-invalid', !ok);
+  if (!ok) {
+    msg.textContent = '账号需为 3–20 位字母、数字或下划线。';
+    msg.className = 'field-feedback is-error';
+    msg.hidden = false;
+  } else {
+    msg.hidden = true;
+  }
+}
+
+function syncRegisterLiveValidation() {
+  updateLiveUsernameUI();
+  updateLivePasswordUI({
+    input: authForm.elements.password,
+    confirmInput: authForm.elements.confirmPassword,
+    rulesEl: $('#reg-pwd-rules'),
+    msgEl: $('#reg-pwd-msg'),
+    confirmMsgEl: $('#reg-confirm-msg'),
+    active: isServerMode && authTab !== 'login',
+  });
+}
+
+function syncChangePasswordLiveValidation() {
+  const form = $('#change-password-form');
+  updateLivePasswordUI({
+    input: form.elements.newPassword,
+    confirmInput: form.elements.confirmNewPassword,
+    rulesEl: $('#cp-pwd-rules'),
+    msgEl: $('#cp-pwd-msg'),
+    confirmMsgEl: $('#cp-confirm-msg'),
+    active: true,
+  });
 }
 
 function resetPasswordVisibility(root = document) {
@@ -403,9 +531,9 @@ function syncAuthTabUI() {
   $('#field-username').hidden = !isServerMode;
   $('#field-password').hidden = !isServerMode;
   $('#field-confirm-password').hidden = !isServerMode || isLogin;
-  $('#field-nickname').hidden = isLogin;
-  $('#field-campus').hidden = isLogin;
+  $('#field-identity-row').hidden = isLogin;
   $('#field-verify').hidden = isLogin;
+  $('#auth-switch-foot').hidden = !isServerMode;
 
   authForm.elements.username.required = isServerMode;
   authForm.elements.password.required = isServerMode;
@@ -415,25 +543,28 @@ function syncAuthTabUI() {
   authForm.elements.answer.required = !isLogin;
 
   authForm.elements.password.autocomplete = isLogin ? 'current-password' : 'new-password';
-  authForm.elements.password.placeholder = isLogin ? '输入密码' : '请使用字母、数字和符号组合（至少 8 位）';
-  $('#auth-password-hint').textContent = isLogin ? '' : '至少 8 位，需包含字母、数字和符号';
+  authForm.elements.password.placeholder = isLogin ? '输入登录密码' : '至少 8 位，含字母、数字和符号';
   resetPasswordVisibility(authDialog);
+  syncRegisterLiveValidation();
 
   if (!isServerMode) {
-    $('#auth-panel-label').textContent = '轻校内验证（演示模式）';
     $('#auth-title').textContent = '验证同学身份';
-    $('#auth-desc').textContent = '答对一道重电校内常识题即可体验发帖、回复和查看联系方式。';
+    $('#auth-panel-label').textContent = '重电校园站 · 轻校内验证（演示）';
     $('#auth-submit').textContent = '完成验证';
   } else if (isLogin) {
-    $('#auth-panel-label').textContent = '欢迎回来';
-    $('#auth-title').textContent = '登录重电校园站';
-    $('#auth-desc').textContent = '输入你注册过的账号和密码即可登录。';
-    $('#auth-submit').textContent = '立即登录';
+    $('#auth-title').textContent = '欢迎回来';
+    $('#auth-panel-label').textContent = '登录你的重电校园站账号';
+    $('#auth-submit').textContent = '登录';
+    $('#auth-switch-text').textContent = '还没有账号？';
+    $('#auth-switch-btn').textContent = '立即注册';
+    $('#auth-switch-btn').dataset.authTab = 'register';
   } else {
-    $('#auth-panel-label').textContent = '轻校内验证注册';
-    $('#auth-title').textContent = '新同学注册';
-    $('#auth-desc').textContent = '答对一道重电校内常识题即可注册账号（答案在服务端校验，防校外广告）。';
-    $('#auth-submit').textContent = '完成注册并登录';
+    $('#auth-title').textContent = '创建账号';
+    $('#auth-panel-label').textContent = '重电校园站 · 轻校内验证';
+    $('#auth-submit').textContent = '注册';
+    $('#auth-switch-text').textContent = '已有账号？';
+    $('#auth-switch-btn').textContent = '立即登录';
+    $('#auth-switch-btn').dataset.authTab = 'login';
   }
 }
 
@@ -489,6 +620,7 @@ async function openAuthDialog(onSuccess = null, preferredTab = 'register') {
     $('#change-password-error').hidden = true;
     $('#change-password-form').reset();
     resetPasswordVisibility(authDialog);
+    syncChangePasswordLiveValidation();
     const isAdmin = isServerMode && currentUser.role === 'admin';
     $('#admin-reports-panel').hidden = !isAdmin;
     $('#admin-questions-panel').hidden = !isAdmin;
@@ -1278,8 +1410,13 @@ document.addEventListener('keydown', (event) => {
 $('#close-composer').addEventListener('click', () => composer.close());
 $('#cancel-post').addEventListener('click', () => composer.close());
 $('#close-auth').addEventListener('click', () => authDialog.close());
-$('#cancel-auth').addEventListener('click', () => authDialog.close());
 $('#close-signed-auth').addEventListener('click', () => authDialog.close());
+
+authForm.elements.username.addEventListener('input', updateLiveUsernameUI);
+authForm.elements.password.addEventListener('input', syncRegisterLiveValidation);
+authForm.elements.confirmPassword.addEventListener('input', syncRegisterLiveValidation);
+$('#change-password-form').elements.newPassword.addEventListener('input', syncChangePasswordLiveValidation);
+$('#change-password-form').elements.confirmNewPassword.addEventListener('input', syncChangePasswordLiveValidation);
 $('#close-lightbox').addEventListener('click', () => lightbox.close());
 lightbox.addEventListener('click', (event) => {
   if (event.target === lightbox) lightbox.close();
@@ -1329,6 +1466,7 @@ $('#change-password-form').addEventListener('submit', async (event) => {
     });
     form.reset();
     resetPasswordVisibility(form);
+    syncChangePasswordLiveValidation();
     $('#change-password-box').open = false;
     showToast('密码已更新，下次登录请使用新密码');
   } catch (e) {
@@ -1360,20 +1498,50 @@ authForm.addEventListener('submit', async (event) => {
   const submitBtn = $('#auth-submit');
 
   if (isServerMode) {
-    if (authTab !== 'login') {
-      const password = authForm.elements.password.value;
+    const username = authForm.elements.username.value.trim();
+    const password = authForm.elements.password.value;
+    if (authTab === 'login') {
+      if (!username || !password) {
+        err.textContent = '请输入账号和密码。';
+        err.hidden = false;
+        return;
+      }
+    } else {
       const confirmPassword = authForm.elements.confirmPassword.value;
+      const nickname = authForm.elements.nickname.value.trim();
+      const answer = authForm.elements.answer.value.trim();
+      if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+        updateLiveUsernameUI();
+        err.textContent = '账号需为 3–20 位字母、数字或下划线。';
+        err.hidden = false;
+        authForm.elements.username.focus();
+        return;
+      }
+      if (!nickname) {
+        err.textContent = '请填写一个昵称。';
+        err.hidden = false;
+        authForm.elements.nickname.focus();
+        return;
+      }
       const pwdErr = validatePasswordStrength(password);
       if (pwdErr) {
+        syncRegisterLiveValidation();
         err.textContent = pwdErr;
         err.hidden = false;
         authForm.elements.password.focus();
         return;
       }
       if (password !== confirmPassword) {
+        syncRegisterLiveValidation();
         err.textContent = '两次输入的密码不一致，请重新确认。';
         err.hidden = false;
         authForm.elements.confirmPassword.focus();
+        return;
+      }
+      if (!answer) {
+        err.textContent = '请填写校内验证题答案。';
+        err.hidden = false;
+        authForm.elements.answer.focus();
         return;
       }
     }
