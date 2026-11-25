@@ -465,15 +465,17 @@ function updateLivePasswordUI({ input, confirmInput, rulesEl, msgEl, confirmMsgE
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-async function refreshCaptcha(clearInput = true) {
+async function refreshCaptcha(clearInput = true, preserveError = false) {
   if (!isServerMode) return;
   try {
     const data = await api('/api/captcha');
     currentCaptchaId = data.captchaId;
     captchaVerifiedForSend = false;
     $('#captcha-img').src = data.image;
-    authForm.elements.captchaCode.classList.remove('is-valid', 'is-invalid');
-    setFieldStatus($('#reg-captcha-msg'), '点击图片可刷新');
+    if (!preserveError) {
+      authForm.elements.captchaCode.classList.remove('is-valid', 'is-invalid');
+      setFieldStatus($('#reg-captcha-msg'), '点击图片可刷新');
+    }
     if (clearInput) authForm.elements.captchaCode.value = '';
   } catch { /* ignore */ }
 }
@@ -1555,6 +1557,12 @@ authForm.elements.confirmPassword.addEventListener('input', syncRegisterLiveVali
 $('#change-password-form').elements.newPassword.addEventListener('input', syncChangePasswordLiveValidation);
 $('#change-password-form').elements.confirmNewPassword.addEventListener('input', syncChangePasswordLiveValidation);
 $('#refresh-captcha-btn').addEventListener('click', () => refreshCaptcha(true));
+authForm.elements.captchaCode.addEventListener('input', () => {
+  if (authForm.elements.captchaCode.classList.contains('is-invalid')) {
+    authForm.elements.captchaCode.classList.remove('is-invalid');
+    setFieldStatus($('#reg-captcha-msg'), '点击图片可刷新');
+  }
+});
 
 $('#send-code-btn').addEventListener('click', async () => {
   const err = $('#auth-error');
@@ -1564,11 +1572,15 @@ $('#send-code-btn').addEventListener('click', async () => {
     updateLiveEmailUI();
     err.textContent = '请先输入有效的邮箱地址。';
     err.hidden = false;
+    showToast('请先输入有效的邮箱地址');
     authForm.elements.username.focus();
     return;
   }
   if (captchaVerifiedForSend) {
-    await refreshCaptcha(true);
+    await refreshCaptcha(true, true);
+    authForm.elements.captchaCode.classList.remove('is-valid');
+    authForm.elements.captchaCode.classList.add('is-invalid');
+    setFieldStatus($('#reg-captcha-msg'), '请输入新图形码', 'is-error');
     err.textContent = '重新发送验证码前，请输入新的图形验证码。';
     err.hidden = false;
     authForm.elements.captchaCode.focus();
@@ -1576,8 +1588,11 @@ $('#send-code-btn').addEventListener('click', async () => {
   }
   const captchaCode = authForm.elements.captchaCode.value.trim();
   if (!captchaCode) {
+    authForm.elements.captchaCode.classList.add('is-invalid');
+    setFieldStatus($('#reg-captcha-msg'), '请先输入图形码', 'is-error');
     err.textContent = '请先输入人机图形验证码，再获取邮箱验证码。';
     err.hidden = false;
+    showToast('请先输入人机图形验证码');
     authForm.elements.captchaCode.focus();
     return;
   }
@@ -1600,11 +1615,19 @@ $('#send-code-btn').addEventListener('click', async () => {
   } catch (e) {
     btn.disabled = false;
     btn.textContent = '发送验证码';
-    authForm.elements.captchaCode.classList.add('is-invalid');
-    setFieldStatus($('#reg-captcha-msg'), '请重新输入', 'is-error');
+    const isCaptchaErr = /图形验证码/.test(e.message);
     err.textContent = e.message;
     err.hidden = false;
-    refreshCaptcha(true);
+    showToast(e.message);
+    if (isCaptchaErr) {
+      authForm.elements.captchaCode.classList.remove('is-valid');
+      authForm.elements.captchaCode.classList.add('is-invalid');
+      setFieldStatus($('#reg-captcha-msg'), e.message.includes('过期') ? '已过期，已换新图' : '输入错误，已换新图', 'is-error');
+      await refreshCaptcha(true, true);
+      authForm.elements.captchaCode.focus();
+    } else {
+      await refreshCaptcha(true, false);
+    }
   }
 });
 $('#close-lightbox').addEventListener('click', () => lightbox.close());
