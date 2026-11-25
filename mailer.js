@@ -151,19 +151,22 @@ async function sendVerificationEmail({ to, code, purpose }) {
     throw new Error('邮件发信服务尚未配置，请联系站长在 .env 中配置 SMTP 或 Resend。');
   }
   const actionLabel = purpose === 'reset' ? '重置密码' : '新同学注册';
-  const subject = `【重电校园站】${actionLabel}验证码：${code}`;
+  const subject = `【重电校园站】${actionLabel}验证码：${code}（5分钟内有效）`;
   const html = `
     <div style="font-family:system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;max-width:480px;margin:0 auto;padding:24px;border:1px solid #eae5ee;border-radius:12px;color:#241f27;">
       <div style="font-size:18px;font-weight:700;color:#801c80;margin-bottom:12px;">重电校园站</div>
-      <p style="margin:0 0 12px;font-size:14px;line-height:1.6;">你好！你正在进行 <strong>${actionLabel}</strong>，本次邮箱验证码为：</p>
-      <div style="font-size:28px;font-weight:700;letter-spacing:6px;color:#6b166b;background:#f7eff7;border:1px solid #e4cde4;border-radius:8px;padding:12px 18px;text-align:center;margin:16px 0;">${code}</div>
-      <p style="margin:0;font-size:12px;color:#625b68;line-height:1.6;">验证码 10 分钟内有效，请勿泄露给他人。如非本人操作，请忽略此邮件。</p>
+      <p style="margin:0 0 12px;font-size:14px;line-height:1.6;">您好！您正在进行 <strong>${actionLabel}</strong>，本次邮箱验证码为：</p>
+      <div style="background:#f7eff7;border:1px solid #e4cde4;border-radius:8px;padding:14px 18px;text-align:center;margin:16px 0;">
+        <span style="display:inline-block;font-size:30px;font-weight:700;letter-spacing:6px;color:#6b166b;user-select:all;-webkit-user-select:all;">${code}</span>
+      </div>
+      <p style="margin:0 0 8px;font-size:12px;color:#625b68;text-align:center;">轻点或长按上方 6 位数字即可选中复制</p>
+      <p style="margin:0;font-size:12px;color:#625b68;line-height:1.6;">验证码 <strong>5 分钟</strong>内有效，请勿泄露给他人。如非您本人操作，请忽略此邮件。</p>
     </div>`;
 
   if (cfg.provider === 'resend') {
     return sendViaResend(cfg, { to, subject, html });
   }
-  return sendViaSmtps(cfg, { to, subject, html, text: `重电校园站${actionLabel}验证码：${code}（10分钟内有效）` });
+  return sendViaSmtps(cfg, { to, subject, html, text: `您好！重电校园站${actionLabel}验证码：${code}（5分钟内有效，请勿泄露给他人）` });
 }
 
 module.exports = {

@@ -173,6 +173,7 @@ let emailVerifyEnabled = false;
 let currentUser = null;
 let currentVerifyQuestion = demoVerifyQuestions[0];
 let currentCaptchaId = '';
+let captchaVerifiedForSend = false;
 let authTab = 'register';
 let editingTopicId = null;
 let reportingTopicId = null;
@@ -464,13 +465,16 @@ function updateLivePasswordUI({ input, confirmInput, rulesEl, msgEl, confirmMsgE
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-async function refreshCaptcha() {
+async function refreshCaptcha(clearInput = true) {
   if (!isServerMode) return;
   try {
     const data = await api('/api/captcha');
     currentCaptchaId = data.captchaId;
+    captchaVerifiedForSend = false;
     $('#captcha-img').src = data.image;
-    authForm.elements.captchaCode.value = '';
+    authForm.elements.captchaCode.classList.remove('is-valid', 'is-invalid');
+    setFieldStatus($('#reg-captcha-msg'), '点击图片可刷新');
+    if (clearInput) authForm.elements.captchaCode.value = '';
   } catch { /* ignore */ }
 }
 
@@ -482,7 +486,7 @@ function startCodeCooldown(seconds = 60) {
     if (codeCooldownLeft <= 0) {
       clearInterval(codeCooldownTimer);
       btn.disabled = false;
-      btn.textContent = '发送验证码';
+      btn.textContent = '重新发送';
       return;
     }
     btn.disabled = true;
@@ -1550,13 +1554,12 @@ authForm.elements.password.addEventListener('input', syncRegisterLiveValidation)
 authForm.elements.confirmPassword.addEventListener('input', syncRegisterLiveValidation);
 $('#change-password-form').elements.newPassword.addEventListener('input', syncChangePasswordLiveValidation);
 $('#change-password-form').elements.confirmNewPassword.addEventListener('input', syncChangePasswordLiveValidation);
-$('#refresh-captcha-btn').addEventListener('click', refreshCaptcha);
+$('#refresh-captcha-btn').addEventListener('click', () => refreshCaptcha(true));
 
 $('#send-code-btn').addEventListener('click', async () => {
   const err = $('#auth-error');
   err.hidden = true;
   const email = authForm.elements.username.value.trim().toLowerCase();
-  const captchaCode = authForm.elements.captchaCode.value.trim();
   if (!EMAIL_RE.test(email)) {
     updateLiveEmailUI();
     err.textContent = '请先输入有效的邮箱地址。';
@@ -1564,6 +1567,14 @@ $('#send-code-btn').addEventListener('click', async () => {
     authForm.elements.username.focus();
     return;
   }
+  if (captchaVerifiedForSend) {
+    await refreshCaptcha(true);
+    err.textContent = '重新发送验证码前，请输入新的图形验证码。';
+    err.hidden = false;
+    authForm.elements.captchaCode.focus();
+    return;
+  }
+  const captchaCode = authForm.elements.captchaCode.value.trim();
   if (!captchaCode) {
     err.textContent = '请先输入人机图形验证码，再获取邮箱验证码。';
     err.hidden = false;
@@ -1579,16 +1590,21 @@ $('#send-code-btn').addEventListener('click', async () => {
       method: 'POST',
       body: JSON.stringify({ email, purpose, captchaId: currentCaptchaId, captchaCode }),
     });
+    captchaVerifiedForSend = true;
+    authForm.elements.captchaCode.classList.remove('is-invalid');
+    authForm.elements.captchaCode.classList.add('is-valid');
+    setFieldStatus($('#reg-captcha-msg'), '✓ 验证通过', 'is-ok');
     startCodeCooldown(res.cooldown || 60);
-    refreshCaptcha();
-    showToast('验证码已发送到你的邮箱，10 分钟内有效（若未收到请查看垃圾箱）');
+    showToast('验证码已发送到您的邮箱，5 分钟内有效（若未收到请查看垃圾箱）');
     authForm.elements.emailCode.focus();
   } catch (e) {
     btn.disabled = false;
     btn.textContent = '发送验证码';
+    authForm.elements.captchaCode.classList.add('is-invalid');
+    setFieldStatus($('#reg-captcha-msg'), '请重新输入', 'is-error');
     err.textContent = e.message;
     err.hidden = false;
-    refreshCaptcha();
+    refreshCaptcha(true);
   }
 });
 $('#close-lightbox').addEventListener('click', () => lightbox.close());
@@ -1832,7 +1848,7 @@ authForm.addEventListener('submit', async (event) => {
     } catch (e) {
       err.textContent = e.message;
       err.hidden = false;
-      if (authTab !== 'login') refreshCaptcha();
+      if (authTab !== 'login' && !emailVerifyEnabled) refreshCaptcha();
     } finally {
       submitBtn.disabled = false;
     }

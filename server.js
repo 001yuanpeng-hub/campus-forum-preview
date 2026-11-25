@@ -616,7 +616,7 @@ async function handleApi(req, res, urlObj) {
     const now = Date.now();
     await sendVerificationEmail({ to: email, code, purpose });
     db.prepare('INSERT INTO email_codes (email, purpose, code_hash, expires_at, attempts, used_at, created_at) VALUES (?, ?, ?, ?, 0, NULL, ?)')
-      .run(email, purpose, hashPassword(code), now + 10 * 60 * 1000, now);
+      .run(email, purpose, hashPassword(code), now + 5 * 60 * 1000, now);
     return sendJson(res, 200, { ok: true, cooldown: 60 });
   }
 
