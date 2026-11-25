@@ -1,0 +1,16 @@
+[Unit]
+Description=CQETC Campus Forum (重电校园站)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/cqetc-forum
+EnvironmentFile=/opt/cqetc-forum/.env
+ExecStart=/usr/local/bin/node /opt/cqetc-forum/server.js
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
