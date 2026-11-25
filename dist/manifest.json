@@ -1,0 +1,17 @@
+{
+  "name": "重电校园站",
+  "short_name": "重电校园站",
+  "description": "面向重庆电子科技职业大学同学的校园问答、经验沉淀与校园互助社区",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#801c80",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

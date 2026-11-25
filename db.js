@@ -22,6 +22,13 @@ function verifyPassword(password, stored) {
   return crypto.timingSafeEqual(derived, storedBuf);
 }
 
+function ensureColumn(db, table, column, definition) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 function initDb() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const db = new DatabaseSync(DB_PATH);
@@ -66,6 +73,7 @@ function initDb() {
       accepted_reply_id TEXT,
       pinned INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
+      updated_at INTEGER,
       last_activity_at INTEGER NOT NULL,
       FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -88,11 +96,52 @@ function initDb() {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS likes (
+      user_id INTEGER NOT NULL,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, target_type, target_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      actor_id INTEGER NOT NULL,
+      topic_id TEXT,
+      reply_id TEXT,
+      message TEXT NOT NULL,
+      read_at INTEGER,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      topic_id TEXT NOT NULL,
+      reporter_id INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      detail TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE,
+      FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_topics_activity ON topics(pinned DESC, last_activity_at DESC);
     CREATE INDEX IF NOT EXISTS idx_topics_category ON topics(category);
     CREATE INDEX IF NOT EXISTS idx_replies_topic ON replies(topic_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_likes_target ON likes(target_type, target_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, created_at DESC);
   `);
+
+  // Safe migration for existing SQLite databases created before Phase 2.5
+  ensureColumn(db, 'topics', 'updated_at', 'INTEGER');
 
   seedInitialData(db);
   return db;
@@ -139,8 +188,8 @@ function seedInitialData(db) {
   const insertTopic = db.prepare(`
     INSERT INTO topics (
       id, title, body, category, campus, tags_json, status, reward, expires_at,
-      contact, images_json, author_id, views, accepted_reply_id, pinned, created_at, last_activity_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      contact, images_json, author_id, views, accepted_reply_id, pinned, created_at, updated_at, last_activity_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
   `);
 
   const insertReply = db.prepare(
@@ -301,23 +350,9 @@ function seedInitialData(db) {
   for (const t of initialTopics) {
     const lastActivity = t.replies.length ? t.replies[t.replies.length - 1].createdAt : t.createdAt;
     insertTopic.run(
-      t.id,
-      t.title,
-      t.body,
-      t.category,
-      t.campus,
-      JSON.stringify(t.tags || []),
-      t.status || null,
-      t.reward || null,
-      t.expiresAt || null,
-      t.contact || null,
-      '[]',
-      t.authorId,
-      t.views || 0,
-      t.accepted || null,
-      t.pinned ? 1 : 0,
-      t.createdAt,
-      lastActivity
+      t.id, t.title, t.body, t.category, t.campus, JSON.stringify(t.tags || []),
+      t.status || null, t.reward || null, t.expiresAt || null, t.contact || null,
+      '[]', t.authorId, t.views || 0, t.accepted || null, t.pinned ? 1 : 0, t.createdAt, lastActivity
     );
     for (const r of t.replies) {
       insertReply.run(r.id, t.id, r.authorId, r.body, r.createdAt);

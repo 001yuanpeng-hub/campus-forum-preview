@@ -94,7 +94,7 @@ ln -sf /etc/nginx/sites-available/cqetc-forum /etc/nginx/sites-enabled/cqetc-for
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl enable --now nginx
-systemctl reload nginx
+systemctl restart nginx
 
 echo ""
 echo "======================================================"

@@ -7,7 +7,6 @@ const crypto = require('node:crypto');
 const { URL } = require('node:url');
 const { initDb, hashPassword, verifyPassword } = require('./db');
 
-// Load optional .env file (without external dependencies)
 function loadDotEnv() {
   const envPath = path.join(__dirname, '.env');
   if (!fs.existsSync(envPath)) return;
@@ -42,11 +41,30 @@ const VALID_CAMPUSES = new Set(['大学城', '永川', '两江', '全校']);
 const VALID_TAGS = new Set(['errand', 'market', 'lost', 'question', 'notes', 'project', 'team', 'internship', 'guide']);
 const AVATAR_COLORS = ['violet', 'blue', 'gold', 'green', 'rose'];
 
+// 社区合规底线拦截词（防代课、代做作业、刷课、替考等违规内容）
+const BLOCKED_PATTERNS = [
+  /代课|替课|帮上课/,
+  /代做作业|代写作业|帮写作业|作业代做|作业代写|代做实验|代写论文/,
+  /刷网课|网课代刷|代刷网课|代考|替考|考试枪手/,
+  /兼职刷单|裸贷|校园贷|博彩|赌博平台/,
+];
+
+function checkContentCompliance(...texts) {
+  const combined = texts.filter(Boolean).join('\n');
+  for (const pattern of BLOCKED_PATTERNS) {
+    if (pattern.test(combined)) {
+      return '内容触发社区规范拦截（严禁发布代课、代做作业、刷网课、替考或违规广告），请修改后再提交。';
+    }
+  }
+  return null;
+}
+
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -58,7 +76,6 @@ const MIME_TYPES = {
 
 const db = initDb();
 
-// Lightweight in-memory rate limiter
 const rateBuckets = new Map();
 function checkRateLimit(key, maxHits, windowMs) {
   const now = Date.now();
@@ -73,7 +90,6 @@ function checkRateLimit(key, maxHits, windowMs) {
   return true;
 }
 
-// Cleanup expired sessions & rate buckets periodically
 setInterval(() => {
   const now = Date.now();
   try {
@@ -156,6 +172,14 @@ function createSession(res, userId) {
   return token;
 }
 
+function createNotification(userId, actorId, type, topicId, replyId, message) {
+  if (!userId || userId === actorId) return;
+  db.prepare(`
+    INSERT INTO notifications (user_id, type, actor_id, topic_id, reply_id, message, read_at, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
+  `).run(userId, type, actorId, topicId || null, replyId || null, message, Date.now());
+}
+
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -203,25 +227,26 @@ function effectiveStatus(row, now = Date.now()) {
 
 function detectImageExtension(buf) {
   if (buf.length < 12) return null;
-  // JPEG: FF D8 FF
   if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return '.jpg';
-  // PNG: 89 50 4E 47 0D 0A 1A 0A
   if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return '.png';
-  // GIF: GIF87a / GIF89a
   if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return '.gif';
-  // WebP: RIFF....WEBP
   if (buf.subarray(0, 4).toString('ascii') === 'RIFF' && buf.subarray(8, 12).toString('ascii') === 'WEBP') return '.webp';
   return null;
 }
 
-function saveUploadedImages(images) {
+function saveUploadedImages(images, allowedExisting = []) {
   if (!Array.isArray(images) || images.length === 0) return [];
   if (images.length > MAX_IMAGES_PER_POST) {
     throw Object.assign(new Error(`每个帖子最多上传 ${MAX_IMAGES_PER_POST} 张图片。`), { status: 400 });
   }
+  const existingSet = new Set(allowedExisting);
   const savedUrls = [];
   for (const item of images) {
     if (typeof item !== 'string') continue;
+    if (existingSet.has(item)) {
+      savedUrls.push(item);
+      continue;
+    }
     const match = item.match(/^data:image\/(?:jpeg|jpg|png|webp|gif);base64,([A-Za-z0-9+/=]+)$/);
     if (!match) {
       throw Object.assign(new Error('仅支持 JPG / PNG / WebP / GIF 格式图片。'), { status: 400 });
@@ -256,7 +281,20 @@ function getRandomVerifyQuestion() {
   return rows[Math.floor(Math.random() * rows.length)];
 }
 
-function formatTopicListItem(row, replies, now) {
+function getLikeStats(targetType, targetIds, currentUserId) {
+  const counts = new Map();
+  const likedSet = new Set();
+  if (!targetIds.length) return { counts, likedSet };
+  const rows = db.prepare(`SELECT target_id, COUNT(*) AS cnt FROM likes WHERE target_type = ? GROUP BY target_id`).all(targetType);
+  for (const r of rows) counts.set(r.target_id, Number(r.cnt));
+  if (currentUserId) {
+    const mine = db.prepare(`SELECT target_id FROM likes WHERE target_type = ? AND user_id = ?`).all(targetType, currentUserId);
+    for (const m of mine) likedSet.add(m.target_id);
+  }
+  return { counts, likedSet };
+}
+
+function formatTopicListItem(row, replies, likeCount, now) {
   const latest = replies.length ? replies[replies.length - 1] : null;
   const peopleMap = new Map();
   peopleMap.set(row.author_nickname, { author: row.author_nickname, initial: row.author_nickname.slice(0, 1), color: row.author_color });
@@ -283,6 +321,7 @@ function formatTopicListItem(row, replies, now) {
     initial: row.author_nickname.slice(0, 1),
     color: row.author_color,
     views: row.views,
+    likeCount: likeCount || 0,
     replyCount: replies.length,
     latestReplyId: latest?.id || null,
     lastActivityAt: row.last_activity_at,
@@ -294,10 +333,12 @@ function formatTopicListItem(row, replies, now) {
 function formatTopicDetail(row, replies, currentUser, now) {
   const status = effectiveStatus(row, now);
   const hasContact = Boolean(row.contact);
-  // 服务端强校验：仅当互助帖处于“进行中”且当前用户已登录时才返回真实联系方式
   const contact = (row.category === 'help' && status === 'open' && currentUser && hasContact)
     ? row.contact
     : null;
+  const canManage = Boolean(currentUser && (currentUser.role === 'admin' || currentUser.id === row.author_id));
+  const topicLikes = getLikeStats('topic', [row.id], currentUser?.id);
+  const replyLikes = getLikeStats('reply', replies.map((r) => r.id), currentUser?.id);
 
   return {
     id: row.id,
@@ -312,6 +353,8 @@ function formatTopicDetail(row, replies, currentUser, now) {
     expiresAt: row.expires_at || null,
     hasContact,
     contact,
+    // 仅作者/管理员编辑时提供原始联系方式以便回填
+    editContact: canManage ? (row.contact || '') : null,
     images: safeParseArray(row.images_json),
     pinned: Boolean(row.pinned),
     accepted: row.accepted_reply_id || null,
@@ -320,9 +363,12 @@ function formatTopicDetail(row, replies, currentUser, now) {
     initial: row.author_nickname.slice(0, 1),
     color: row.author_color,
     views: row.views,
+    likeCount: topicLikes.counts.get(row.id) || 0,
+    liked: topicLikes.likedSet.has(row.id),
     createdAt: row.created_at,
+    updatedAt: row.updated_at || null,
     lastActivityAt: row.last_activity_at,
-    canManage: Boolean(currentUser && (currentUser.role === 'admin' || currentUser.id === row.author_id)),
+    canManage,
     canPin: Boolean(currentUser && currentUser.role === 'admin'),
     replies: replies.map((r) => ({
       id: r.id,
@@ -332,6 +378,8 @@ function formatTopicDetail(row, replies, currentUser, now) {
       initial: r.author_nickname.slice(0, 1),
       color: r.author_color,
       createdAt: r.created_at,
+      likeCount: replyLikes.counts.get(r.id) || 0,
+      liked: replyLikes.likedSet.has(r.id),
       canDelete: Boolean(currentUser && (currentUser.role === 'admin' || currentUser.id === r.author_id)),
     })),
   };
@@ -366,22 +414,26 @@ async function handleApi(req, res, urlObj) {
   const user = getCurrentUser(req);
   const ip = getClientIp(req);
 
-  // GET /api/health
   if (method === 'GET' && pathname === '/api/health') {
     return sendJson(res, 200, { ok: true, mode: 'server' });
   }
 
-  // GET /api/bootstrap
   if (method === 'GET' && pathname === '/api/bootstrap') {
-    const question = getRandomVerifyQuestion();
+    const unreadCount = user
+      ? db.prepare('SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ? AND read_at IS NULL').get(user.id).cnt
+      : 0;
+    const pendingReports = user?.role === 'admin'
+      ? db.prepare("SELECT COUNT(*) AS cnt FROM reports WHERE status = 'pending'").get().cnt
+      : 0;
     return sendJson(res, 200, {
       mode: 'server',
       user,
-      verifyQuestion: question,
+      unreadCount: Number(unreadCount),
+      pendingReports: Number(pendingReports),
+      verifyQuestion: getRandomVerifyQuestion(),
     });
   }
 
-  // GET /api/verify-question
   if (method === 'GET' && pathname === '/api/verify-question') {
     return sendJson(res, 200, { verifyQuestion: getRandomVerifyQuestion() });
   }
@@ -411,20 +463,18 @@ async function handleApi(req, res, urlObj) {
     if (!VALID_CAMPUSES.has(campus) || campus === '全校') {
       return sendJson(res, 400, { error: '请选择有效校区。' });
     }
+    const nickBlock = checkContentCompliance(nickname);
+    if (nickBlock) return sendJson(res, 400, { error: '昵称包含违规词汇，请更换。' });
 
     const qRow = db.prepare('SELECT id, question, answers_json FROM verify_questions WHERE id = ? AND active = 1').get(questionId);
-    if (!qRow) {
-      return sendJson(res, 400, { error: '验证题已失效，请刷新后重试。' });
-    }
+    if (!qRow) return sendJson(res, 400, { error: '验证题已失效，请刷新后重试。' });
     const validAnswers = safeParseArray(qRow.answers_json).map((a) => String(a).trim().toLowerCase());
     if (!validAnswers.includes(answer.toLowerCase())) {
       return sendJson(res, 400, { error: '校内验证题答案不对哦，再想想重电同学都知道的简称！' });
     }
 
     const exists = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
-    if (exists) {
-      return sendJson(res, 409, { error: '该账号已被注册，请换一个或直接登录。' });
-    }
+    if (exists) return sendJson(res, 409, { error: '该账号已被注册，请换一个或直接登录。' });
 
     const color = AVATAR_COLORS[nickname.charCodeAt(0) % AVATAR_COLORS.length];
     const now = Date.now();
@@ -473,6 +523,213 @@ async function handleApi(req, res, urlObj) {
     return sendJson(res, 200, { ok: true });
   }
 
+  // POST /api/auth/change-password
+  if (method === 'POST' && pathname === '/api/auth/change-password') {
+    if (!user) return sendJson(res, 401, { error: '请先登录。' });
+    const body = await readJsonBody(req);
+    const oldPassword = String(body.oldPassword || '');
+    const newPassword = String(body.newPassword || '');
+    if (newPassword.length < 6 || newPassword.length > 64) {
+      return sendJson(res, 400, { error: '新密码长度需在 6–64 位之间。' });
+    }
+    const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(user.id);
+    if (!row || !verifyPassword(oldPassword, row.password_hash)) {
+      return sendJson(res, 400, { error: '当前原密码不正确。' });
+    }
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(newPassword), user.id);
+    return sendJson(res, 200, { ok: true });
+  }
+
+  // GET /api/users/:id (Public student profile)
+  const userProfileMatch = pathname.match(/^\/api\/users\/(\d+)$/);
+  if (method === 'GET' && userProfileMatch) {
+    const targetId = Number(userProfileMatch[1]);
+    const u = db.prepare('SELECT id, nickname, campus, role, color, created_at FROM users WHERE id = ?').get(targetId);
+    if (!u) return sendJson(res, 404, { error: '未找到该同学。' });
+
+    const topics = db.prepare(`
+      SELECT t.*, u.nickname AS author_nickname, u.color AS author_color
+      FROM topics t JOIN users u ON u.id = t.author_id
+      WHERE t.author_id = ?
+      ORDER BY t.created_at DESC
+      LIMIT 30
+    `).all(targetId);
+
+    const replyCount = db.prepare('SELECT COUNT(*) AS cnt FROM replies WHERE author_id = ?').get(targetId).cnt;
+    const topicLikesReceived = db.prepare(`
+      SELECT COUNT(*) AS cnt FROM likes l JOIN topics t ON l.target_id = t.id
+      WHERE l.target_type = 'topic' AND t.author_id = ?
+    `).get(targetId).cnt;
+    const replyLikesReceived = db.prepare(`
+      SELECT COUNT(*) AS cnt FROM likes l JOIN replies r ON l.target_id = r.id
+      WHERE l.target_type = 'reply' AND r.author_id = ?
+    `).get(targetId).cnt;
+
+    const now = Date.now();
+    const { counts: likeCounts } = getLikeStats('topic', topics.map((t) => t.id), null);
+    const items = topics.map((row) => {
+      const tReplies = db.prepare(`
+        SELECT r.id, r.created_at, u.nickname AS author_nickname, u.color AS author_color
+        FROM replies r JOIN users u ON u.id = r.author_id WHERE r.topic_id = ? ORDER BY r.created_at ASC
+      `).all(row.id);
+      return formatTopicListItem(row, tReplies, likeCounts.get(row.id) || 0, now);
+    });
+
+    return sendJson(res, 200, {
+      profile: {
+        id: u.id,
+        nickname: u.nickname,
+        initial: u.nickname.slice(0, 1),
+        campus: u.campus,
+        role: u.role,
+        color: u.color,
+        createdAt: u.created_at,
+        topicCount: topics.length,
+        replyCount: Number(replyCount),
+        likesReceived: Number(topicLikesReceived) + Number(replyLikesReceived),
+      },
+      topics: items,
+    });
+  }
+
+  // Notifications
+  if (pathname === '/api/notifications' && method === 'GET') {
+    if (!user) return sendJson(res, 401, { error: '请先登录。' });
+    const rows = db.prepare(`
+      SELECT n.*, u.nickname AS actor_nickname, u.color AS actor_color
+      FROM notifications n
+      JOIN users u ON u.id = n.actor_id
+      WHERE n.user_id = ?
+      ORDER BY n.created_at DESC
+      LIMIT 30
+    `).all(user.id);
+    const unreadCount = rows.filter((r) => !r.read_at).length;
+    return sendJson(res, 200, {
+      unreadCount,
+      notifications: rows.map((r) => ({
+        id: r.id,
+        type: r.type,
+        topicId: r.topic_id,
+        replyId: r.reply_id,
+        message: r.message,
+        actor: r.actor_nickname,
+        actorInitial: r.actor_nickname.slice(0, 1),
+        actorColor: r.actor_color,
+        read: Boolean(r.read_at),
+        createdAt: r.created_at,
+      })),
+    });
+  }
+
+  if (pathname === '/api/notifications/unread-count' && method === 'GET') {
+    if (!user) return sendJson(res, 200, { unreadCount: 0 });
+    const cnt = db.prepare('SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ? AND read_at IS NULL').get(user.id).cnt;
+    return sendJson(res, 200, { unreadCount: Number(cnt) });
+  }
+
+  if (pathname === '/api/notifications/read-all' && method === 'POST') {
+    if (!user) return sendJson(res, 401, { error: '请先登录。' });
+    db.prepare('UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL').run(Date.now(), user.id);
+    return sendJson(res, 200, { ok: true });
+  }
+
+  const notifReadMatch = pathname.match(/^\/api\/notifications\/(\d+)\/read$/);
+  if (notifReadMatch && method === 'POST') {
+    if (!user) return sendJson(res, 401, { error: '请先登录。' });
+    db.prepare('UPDATE notifications SET read_at = ? WHERE id = ? AND user_id = ?').run(Date.now(), Number(notifReadMatch[1]), user.id);
+    return sendJson(res, 200, { ok: true });
+  }
+
+  // POST /api/likes (toggle like on topic or reply)
+  if (method === 'POST' && pathname === '/api/likes') {
+    if (!user) return sendJson(res, 401, { error: '请先登录后再点赞。' });
+    const body = await readJsonBody(req);
+    const targetType = body.targetType === 'reply' ? 'reply' : 'topic';
+    const targetId = String(body.targetId || '').trim();
+    if (!targetId) return sendJson(res, 400, { error: '参数无效。' });
+
+    let ownerId = null;
+    let notifyTopicId = targetId;
+    let notifyReplyId = null;
+    let notifyLabel = '';
+
+    if (targetType === 'topic') {
+      const t = db.prepare('SELECT id, title, author_id FROM topics WHERE id = ?').get(targetId);
+      if (!t) return sendJson(res, 404, { error: '帖子不存在。' });
+      ownerId = t.author_id;
+      notifyLabel = `赞了你的帖子「${t.title.slice(0, 24)}」`;
+    } else {
+      const r = db.prepare('SELECT r.id, r.topic_id, r.author_id, t.title FROM replies r JOIN topics t ON t.id = r.topic_id WHERE r.id = ?').get(targetId);
+      if (!r) return sendJson(res, 404, { error: '回复不存在。' });
+      ownerId = r.author_id;
+      notifyTopicId = r.topic_id;
+      notifyReplyId = r.id;
+      notifyLabel = `赞了你在「${r.title.slice(0, 22)}」下的回复`;
+    }
+
+    const exists = db.prepare('SELECT 1 FROM likes WHERE user_id = ? AND target_type = ? AND target_id = ?').get(user.id, targetType, targetId);
+    let liked;
+    if (exists) {
+      db.prepare('DELETE FROM likes WHERE user_id = ? AND target_type = ? AND target_id = ?').run(user.id, targetType, targetId);
+      liked = false;
+    } else {
+      db.prepare('INSERT INTO likes (user_id, target_type, target_id, created_at) VALUES (?, ?, ?, ?)').run(user.id, targetType, targetId, Date.now());
+      liked = true;
+      createNotification(ownerId, user.id, 'like', notifyTopicId, notifyReplyId, `${user.nickname} ${notifyLabel}`);
+    }
+    const count = db.prepare('SELECT COUNT(*) AS cnt FROM likes WHERE target_type = ? AND target_id = ?').get(targetType, targetId).cnt;
+    return sendJson(res, 200, { liked, count: Number(count) });
+  }
+
+  // Reports (submit & admin management)
+  if (pathname === '/api/reports' && method === 'POST') {
+    if (!user) return sendJson(res, 401, { error: '请先登录后再举报。' });
+    if (!checkRateLimit(`report:${user.id}`, 8, 10 * 60 * 1000)) {
+      return sendJson(res, 429, { error: '举报太频繁，请稍后再试。' });
+    }
+    const body = await readJsonBody(req);
+    const topicId = String(body.topicId || '').trim();
+    const reason = String(body.reason || '').trim().slice(0, 40);
+    const detail = String(body.detail || '').trim().slice(0, 200);
+    if (!topicId || !reason) return sendJson(res, 400, { error: '请选择举报原因。' });
+    const exists = db.prepare('SELECT id FROM topics WHERE id = ?').get(topicId);
+    if (!exists) return sendJson(res, 404, { error: '帖子不存在。' });
+    db.prepare('INSERT INTO reports (topic_id, reporter_id, reason, detail, status, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(topicId, user.id, reason, detail || null, 'pending', Date.now());
+    return sendJson(res, 201, { ok: true });
+  }
+
+  if (pathname === '/api/admin/reports' && method === 'GET') {
+    if (!user || user.role !== 'admin') return sendJson(res, 403, { error: '仅管理员可查看举报。' });
+    const rows = db.prepare(`
+      SELECT r.*, t.title AS topic_title, u.nickname AS reporter_nickname
+      FROM reports r
+      JOIN topics t ON t.id = r.topic_id
+      JOIN users u ON u.id = r.reporter_id
+      WHERE r.status = 'pending'
+      ORDER BY r.created_at DESC
+      LIMIT 30
+    `).all();
+    return sendJson(res, 200, {
+      reports: rows.map((r) => ({
+        id: r.id,
+        topicId: r.topic_id,
+        topicTitle: r.topic_title,
+        reporter: r.reporter_nickname,
+        reason: r.reason,
+        detail: r.detail,
+        createdAt: r.created_at,
+      })),
+    });
+  }
+
+  const reportResolveMatch = pathname.match(/^\/api\/admin\/reports\/(\d+)\/resolve$/);
+  if (reportResolveMatch && method === 'POST') {
+    if (!user || user.role !== 'admin') return sendJson(res, 403, { error: '仅管理员可操作。' });
+    db.prepare("UPDATE reports SET status = 'resolved' WHERE id = ?").run(Number(reportResolveMatch[1]));
+    return sendJson(res, 200, { ok: true });
+  }
+
   // GET /api/topics
   if (method === 'GET' && pathname === '/api/topics') {
     const category = urlObj.searchParams.get('category') || 'all';
@@ -504,6 +761,8 @@ async function handleApi(req, res, urlObj) {
       repliesByTopic.get(r.topic_id).push(r);
     }
 
+    const { counts: likeCounts } = getLikeStats('topic', rows.map((r) => r.id), null);
+
     const TAG_LABELS = {
       errand: '跑腿代取', market: '二手闲置', lost: '失物招领',
       question: '求助', notes: '经验分享', project: '项目实践',
@@ -513,7 +772,7 @@ async function handleApi(req, res, urlObj) {
       help: '校园互助', study: '课程与实训', career: '实习与竞赛', life: '校园生活', notice: '站务与指南',
     };
 
-    let filtered = rows.filter((row) => {
+    const filtered = rows.filter((row) => {
       const status = effectiveStatus(row, now);
       if (activeOnly && status && status !== 'open') return false;
       if (category !== 'all' && row.category !== category) return false;
@@ -524,11 +783,7 @@ async function handleApi(req, res, urlObj) {
       if (tab === 'unanswered' && tReplies.length > 0) return false;
       if (words.length) {
         const haystack = [
-          row.title,
-          row.body,
-          row.reward || '',
-          row.author_nickname,
-          row.campus,
+          row.title, row.body, row.reward || '', row.author_nickname, row.campus,
           CAT_LABELS[row.category] || '',
           ...tTags.map((id) => TAG_LABELS[id] || id),
           ...tReplies.map((r) => r.body),
@@ -539,12 +794,16 @@ async function handleApi(req, res, urlObj) {
     });
 
     if (tab === 'popular') {
-      filtered.sort((a, b) => (b.pinned - a.pinned) || (b.views - a.views) || (b.last_activity_at - a.last_activity_at));
+      filtered.sort((a, b) => {
+        const scoreA = a.views + (likeCounts.get(a.id) || 0) * 12;
+        const scoreB = b.views + (likeCounts.get(b.id) || 0) * 12;
+        return (b.pinned - a.pinned) || (scoreB - scoreA) || (b.last_activity_at - a.last_activity_at);
+      });
     } else {
       filtered.sort((a, b) => (b.pinned - a.pinned) || (b.last_activity_at - a.last_activity_at));
     }
 
-    const items = filtered.map((row) => formatTopicListItem(row, repliesByTopic.get(row.id) || [], now));
+    const items = filtered.map((row) => formatTopicListItem(row, repliesByTopic.get(row.id) || [], likeCounts.get(row.id) || 0, now));
     return sendJson(res, 200, { topics: items, total: items.length });
   }
 
@@ -567,6 +826,9 @@ async function handleApi(req, res, urlObj) {
     if (!VALID_CATEGORIES.has(category)) return sendJson(res, 400, { error: '无效的版块。' });
     if (!VALID_CAMPUSES.has(campus)) return sendJson(res, 400, { error: '无效的校区。' });
 
+    const blocked = checkContentCompliance(title, content, body.reward);
+    if (blocked) return sendJson(res, 400, { error: blocked });
+
     const savedImages = saveUploadedImages(body.images);
     const now = Date.now();
     const id = `t-${now}-${crypto.randomBytes(3).toString('hex')}`;
@@ -580,8 +842,8 @@ async function handleApi(req, res, urlObj) {
     db.prepare(`
       INSERT INTO topics (
         id, title, body, category, campus, tags_json, status, reward, expires_at,
-        contact, images_json, author_id, views, accepted_reply_id, pinned, created_at, last_activity_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, 0, ?, ?)
+        contact, images_json, author_id, views, accepted_reply_id, pinned, created_at, updated_at, last_activity_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, 0, ?, NULL, ?)
     `).run(
       id, title, content, category, campus, JSON.stringify(tags), status, reward, expiresAt,
       contact, JSON.stringify(savedImages), user.id, now, now
@@ -603,7 +865,6 @@ async function handleApi(req, res, urlObj) {
 
     if (!topicRow) return sendJson(res, 404, { error: '帖子不存在或已被删除。' });
 
-    // GET /api/topics/:id
     if (method === 'GET' && !sub) {
       db.prepare('UPDATE topics SET views = views + 1 WHERE id = ?').run(topicId);
       topicRow.views += 1;
@@ -617,7 +878,55 @@ async function handleApi(req, res, urlObj) {
       return sendJson(res, 200, { topic: formatTopicDetail(topicRow, replies, user, Date.now()) });
     }
 
-    // POST /api/topics/:id/replies
+    // PATCH /api/topics/:id (edit topic)
+    if (method === 'PATCH' && !sub) {
+      if (!user) return sendJson(res, 401, { error: '请先登录。' });
+      if (user.role !== 'admin' && user.id !== topicRow.author_id) {
+        return sendJson(res, 403, { error: '只有楼主或管理员可以编辑该帖子。' });
+      }
+      const body = await readJsonBody(req);
+      const title = String(body.title || '').trim();
+      const content = String(body.body || '').trim();
+      const category = String(body.category || topicRow.category).trim();
+      const campus = String(body.campus || topicRow.campus).trim();
+      const rawTags = Array.isArray(body.tags) ? body.tags : [];
+      const tags = [...new Set(rawTags.filter((t) => VALID_TAGS.has(t)))].slice(0, 5);
+
+      if (!title || title.length > 80) return sendJson(res, 400, { error: '标题需为 1–80 字。' });
+      if (!content || content.length > 3000) return sendJson(res, 400, { error: '正文需为 1–3000 字。' });
+      if (!VALID_CATEGORIES.has(category)) return sendJson(res, 400, { error: '无效的版块。' });
+      if (!VALID_CAMPUSES.has(campus)) return sendJson(res, 400, { error: '无效的校区。' });
+
+      const blocked = checkContentCompliance(title, content, body.reward);
+      if (blocked) return sendJson(res, 400, { error: blocked });
+
+      const existingImages = safeParseArray(topicRow.images_json);
+      const nextImages = Array.isArray(body.images)
+        ? saveUploadedImages(body.images, existingImages)
+        : existingImages;
+
+      const isHelp = category === 'help';
+      const reward = isHelp ? String(body.reward || '').trim().slice(0, 24) || null : null;
+      const contact = isHelp ? String(body.contact || '').trim().slice(0, 60) || null : null;
+      const status = isHelp ? (topicRow.status || 'open') : null;
+      let expiresAt = isHelp ? topicRow.expires_at : null;
+      if (isHelp && body.ttl !== undefined && body.ttl !== '') {
+        const ttlHours = Number(body.ttl);
+        expiresAt = ttlHours > 0 && ttlHours <= 720 ? Date.now() + ttlHours * 3600 * 1000 : null;
+      }
+
+      db.prepare(`
+        UPDATE topics
+        SET title = ?, body = ?, category = ?, campus = ?, tags_json = ?,
+            status = ?, reward = ?, expires_at = ?, contact = ?, images_json = ?, updated_at = ?
+        WHERE id = ?
+      `).run(
+        title, content, category, campus, JSON.stringify(tags),
+        status, reward, expiresAt, contact, JSON.stringify(nextImages), Date.now(), topicId
+      );
+      return sendJson(res, 200, { id: topicId });
+    }
+
     if (method === 'POST' && sub === 'replies') {
       if (!user) return sendJson(res, 401, { error: '请先登录或完成校内验证后再回复。' });
       if (!checkRateLimit(`reply:${user.id}`, 20, 10 * 60 * 1000)) {
@@ -626,15 +935,22 @@ async function handleApi(req, res, urlObj) {
       const body = await readJsonBody(req);
       const content = String(body.body || '').trim();
       if (!content || content.length > 1000) return sendJson(res, 400, { error: '回复内容需为 1–1000 字。' });
+      const blocked = checkContentCompliance(content);
+      if (blocked) return sendJson(res, 400, { error: blocked });
+
       const now = Date.now();
       const replyId = `r-${now}-${crypto.randomBytes(3).toString('hex')}`;
       db.prepare('INSERT INTO replies (id, topic_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)')
         .run(replyId, topicId, user.id, content, now);
       db.prepare('UPDATE topics SET last_activity_at = ? WHERE id = ?').run(now, topicId);
+
+      createNotification(
+        topicRow.author_id, user.id, 'reply', topicId, replyId,
+        `${user.nickname} 回复了你的帖子「${topicRow.title.slice(0, 24)}」`
+      );
       return sendJson(res, 201, { id: replyId });
     }
 
-    // PATCH /api/topics/:id/status
     if (method === 'PATCH' && sub === 'status') {
       if (!user) return sendJson(res, 401, { error: '请先登录。' });
       if (user.role !== 'admin' && user.id !== topicRow.author_id) {
@@ -649,7 +965,6 @@ async function handleApi(req, res, urlObj) {
       return sendJson(res, 200, { status: nextStatus });
     }
 
-    // POST /api/topics/:id/accept
     if (method === 'POST' && sub === 'accept') {
       if (!user) return sendJson(res, 401, { error: '请先登录。' });
       if (user.role !== 'admin' && user.id !== topicRow.author_id) {
@@ -657,16 +972,22 @@ async function handleApi(req, res, urlObj) {
       }
       const body = await readJsonBody(req);
       const replyId = body.replyId ? String(body.replyId) : null;
+      let replyRow = null;
       if (replyId) {
-        const exists = db.prepare('SELECT id FROM replies WHERE id = ? AND topic_id = ?').get(replyId, topicId);
-        if (!exists) return sendJson(res, 404, { error: '该回复不存在。' });
+        replyRow = db.prepare('SELECT id, author_id FROM replies WHERE id = ? AND topic_id = ?').get(replyId, topicId);
+        if (!replyRow) return sendJson(res, 404, { error: '该回复不存在。' });
       }
       const nextAccepted = topicRow.accepted_reply_id === replyId ? null : replyId;
       db.prepare('UPDATE topics SET accepted_reply_id = ? WHERE id = ?').run(nextAccepted, topicId);
+      if (nextAccepted && replyRow) {
+        createNotification(
+          replyRow.author_id, user.id, 'accept', topicId, replyRow.id,
+          `${user.nickname} 采纳了你在「${topicRow.title.slice(0, 22)}」下的回答`
+        );
+      }
       return sendJson(res, 200, { accepted: nextAccepted });
     }
 
-    // PATCH /api/topics/:id/pin
     if (method === 'PATCH' && sub === 'pin') {
       if (!user || user.role !== 'admin') return sendJson(res, 403, { error: '仅管理员可置顶或取消置顶。' });
       const nextPinned = topicRow.pinned ? 0 : 1;
@@ -674,18 +995,17 @@ async function handleApi(req, res, urlObj) {
       return sendJson(res, 200, { pinned: Boolean(nextPinned) });
     }
 
-    // DELETE /api/topics/:id
     if (method === 'DELETE' && !sub) {
       if (!user) return sendJson(res, 401, { error: '请先登录。' });
       if (user.role !== 'admin' && user.id !== topicRow.author_id) {
         return sendJson(res, 403, { error: '没有权限删除该帖子。' });
       }
       db.prepare('DELETE FROM topics WHERE id = ?').run(topicId);
+      db.prepare("DELETE FROM likes WHERE target_type = 'topic' AND target_id = ?").run(topicId);
       return sendJson(res, 200, { ok: true });
     }
   }
 
-  // DELETE /api/replies/:id
   const replyMatch = pathname.match(/^\/api\/replies\/([a-zA-Z0-9-]+)$/);
   if (method === 'DELETE' && replyMatch) {
     if (!user) return sendJson(res, 401, { error: '请先登录。' });
@@ -696,11 +1016,11 @@ async function handleApi(req, res, urlObj) {
       return sendJson(res, 403, { error: '没有权限删除该回复。' });
     }
     db.prepare('DELETE FROM replies WHERE id = ?').run(replyId);
+    db.prepare("DELETE FROM likes WHERE target_type = 'reply' AND target_id = ?").run(replyId);
     db.prepare('UPDATE topics SET accepted_reply_id = NULL WHERE id = ? AND accepted_reply_id = ?').run(replyRow.topic_id, replyId);
     return sendJson(res, 200, { ok: true });
   }
 
-  // Admin: manage campus verification question bank
   if (pathname === '/api/admin/questions') {
     if (!user || user.role !== 'admin') return sendJson(res, 403, { error: '仅管理员可管理校内验证题库。' });
     if (method === 'GET') {

@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="重电校园站，面向重庆电子科技职业大学同学的校园问答、经验分享与互助社区。">
   <meta name="theme-color" content="#801c80">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="重电校园站">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="manifest" href="manifest.json">
   <title>重电校园站 · 校园问答与互助社区</title>
   <link rel="stylesheet" href="styles.css">
   <script defer src="app.js"></script>
@@ -32,7 +36,6 @@
     <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 3v3m6-3v3M9 18v3m6-3v3M3 9h3m-3 6h3m12-6h3m-3 6h3"/></symbol>
     <symbol id="i-team" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0"/><circle cx="16.5" cy="9.5" r="2.3"/><path d="M16.5 14.2a4.5 4.5 0 0 1 4 4.8"/></symbol>
     <symbol id="i-id-card" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="10.5" r="1.8"/><path d="M6 15.5a2.8 2.8 0 0 1 5 0M14 10h4M14 14h3"/></symbol>
-    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l2.1-2.1a4.5 4.5 0 0 0-6.4-6.4L10.8 6.8"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-2.1 2.1a4.5 4.5 0 0 0 6.4 6.4l1.3-1.3"/></symbol>
     <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 11.5a8 8 0 0 1-8 8c-1.3 0-2.5-.3-3.6-.8L4 20l1.3-4.2A8 8 0 1 1 20 11.5Z"/></symbol>
     <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5m6 6-6-6 6-6"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
@@ -42,6 +45,10 @@
     <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15.5-4.5-4.5L9 18.5"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5a7 7 0 0 1 14 0"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 17 20l1-13M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8.5a6 6 0 0 0-12 0c0 6-2.5 7.5-2.5 7.5h17S18 14.5 18 8.5Z"/><path d="M10.3 19.5a2 2 0 0 0 3.4 0"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.2s-7.5-4.6-8.8-9.5A4.8 4.8 0 0 1 12 6.8a4.8 4.8 0 0 1 8.8 3.9c-1.3 4.9-8.8 9.5-8.8 9.5Z"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2.5 19.5h19L12 3Z"/><path d="M12 9.5v4.5"/><circle cx="12" cy="16.8" r=".6" fill="currentColor"/></symbol>
   </svg>
 
   <header class="topbar">
@@ -53,6 +60,10 @@
         <kbd aria-hidden="true">/</kbd>
       </form>
       <div class="top-actions">
+        <button class="icon-button notif-trigger" id="notif-button" type="button" aria-label="消息通知" hidden>
+          <svg class="icon"><use href="#i-bell"/></svg>
+          <span class="notif-badge" id="notif-badge" hidden>0</span>
+        </button>
         <button class="button secondary auth-trigger" id="auth-button" type="button" data-auth><svg class="icon"><use href="#i-user"/></svg><span>登录 / 注册</span></button>
         <button class="button primary header-post" type="button" data-compose><svg class="icon"><use href="#i-plus"/></svg><span>发布帖子</span></button>
       </div>
@@ -94,6 +105,7 @@
         <div id="feed" class="feed"></div>
       </section>
       <section id="topic-page" hidden aria-label="帖子详情"></section>
+      <section id="profile-page" hidden aria-label="同学主页"></section>
     </main>
   </div>
 
@@ -113,6 +125,7 @@
         <div class="field-row">
           <label><span>酬劳 / 价格 <span class="choice-hint">选填</span></span><input name="reward" maxlength="24" placeholder="如：5 元、¥35、AA、请喝奶茶"></label>
           <label><span>有效期</span><select name="ttl">
+            <option value="">保持不变（仅编辑时）</option>
             <option value="2">2 小时内</option>
             <option value="12" selected>12 小时内</option>
             <option value="72">3 天内</option>
@@ -171,7 +184,21 @@
 
       <div id="auth-signed-in" class="auth-signed-in" hidden>
         <div class="auth-profile" id="auth-profile"></div>
-        <p class="form-note" id="auth-signed-note">当前已登录，可以发帖、回复、结贴、采纳答案并查看互助联系方式。</p>
+        <p class="form-note" id="auth-signed-note">当前已登录，可以发帖、回复、点赞、结贴、采纳答案并查看互助联系方式。</p>
+
+        <details id="change-password-box" class="admin-box" hidden>
+          <summary class="admin-summary">修改登录密码</summary>
+          <form id="change-password-form" class="admin-q-form" style="margin-top:8px">
+            <input name="oldPassword" type="password" required placeholder="输入当前原密码" autocomplete="current-password">
+            <input name="newPassword" type="password" required minlength="6" maxlength="64" placeholder="输入新密码（至少 6 位）" autocomplete="new-password">
+            <button class="button secondary small" type="submit">保存新密码</button>
+          </form>
+        </details>
+
+        <div id="admin-reports-panel" class="admin-box" hidden>
+          <div class="admin-box-head">待处理举报 <span class="choice-hint" id="admin-reports-count"></span></div>
+          <div id="admin-reports-list" class="admin-q-list"></div>
+        </div>
 
         <div id="admin-questions-panel" class="admin-box" hidden>
           <div class="admin-box-head">校内验证题库管理 <span class="choice-hint">注册时随机抽题，防校外广告</span></div>
@@ -189,6 +216,43 @@
         </div>
       </div>
     </div>
+  </dialog>
+
+  <dialog id="notif-dialog" aria-labelledby="notif-title">
+    <div class="composer-form">
+      <div class="dialog-head">
+        <div><div class="panel-label">站内提醒</div><h2 id="notif-title">消息通知</h2></div>
+        <div class="dialog-head-actions">
+          <button class="text-button" id="mark-all-read" type="button">全部已读</button>
+          <button class="icon-button" id="close-notif" type="button" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button>
+        </div>
+      </div>
+      <div id="notif-list" class="notif-list"></div>
+    </div>
+  </dialog>
+
+  <dialog id="report-dialog" aria-labelledby="report-title">
+    <form id="report-form" class="composer-form">
+      <div class="dialog-head">
+        <div><div class="panel-label">社区治理</div><h2 id="report-title">举报帖子</h2></div>
+        <button class="icon-button" id="close-report" type="button" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button>
+      </div>
+      <label>举报原因
+        <select name="reason" required>
+          <option value="代课/代做作业等违规信息">代课 / 代做作业 / 刷课等违规信息</option>
+          <option value="垃圾广告或校外引流">垃圾广告 / 校外引流</option>
+          <option value="虚假或已失效信息">虚假信息 / 骗局</option>
+          <option value="不友善言论或隐私泄露">不友善言论 / 泄露他人隐私</option>
+        </select>
+      </label>
+      <label>补充说明 <span class="choice-hint">选填</span>
+        <textarea name="detail" rows="3" maxlength="200" placeholder="简要说明违规情况，方便站长核查处理"></textarea>
+      </label>
+      <div class="dialog-actions">
+        <button class="button secondary" id="cancel-report" type="button">取消</button>
+        <button class="button primary" type="submit">提交举报</button>
+      </div>
+    </form>
   </dialog>
 
   <dialog id="lightbox" class="lightbox" aria-label="查看大图">

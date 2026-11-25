@@ -31,7 +31,6 @@ const tabs = [
   { id: 'unanswered', name: '待回答' },
 ];
 
-// 静态演示模式备用题库（接入后端后验证完全在服务器端进行）
 const demoVerifyQuestions = [
   { id: 1, question: '我们学校的别名是啥？', answers: ['电子校'] },
 ];
@@ -53,7 +52,7 @@ const seed = [
     color: 'violet',
     createdAt: Date.parse('2026-06-12T09:00:00+08:00'),
     views: 108,
-    body: '1. 提问与经验分享：写清楚校区、你想解决的问题和已经试过的方法。\n2. 校园互助（跑腿代取、二手、拼车、失物招领）：请填好有效期和独立联系方式，完成后点「标记为已完成」，联系方式会自动隐藏。\n3. 社区边界：请勿发布代课、代做作业、刷课或任何违规广告信息。\n\n当前为离线演示模式，试发内容保存在当前浏览器。运行本地后端服务后可启用多人账号与数据库持久化。',
+    body: '1. 提问与经验分享：写清楚校区、你想解决的问题和已经试过的方法。\n2. 校园互助（跑腿代取、二手、拼车、失物招领）：请填好有效期和独立联系方式，完成后点「标记为已完成」，联系方式会自动隐藏。\n3. 社区边界：请勿发布代课、代做作业、刷课或任何违规广告信息。\n\n当前为离线演示模式，试发内容保存在当前浏览器。',
     replies: [],
   },
   {
@@ -149,33 +148,32 @@ const seed = [
     body: '晚自习结束在二教 304 后排看到的，暂时放在楼管阿姨那里，失主记得去认领。',
     replies: [],
   },
-  { id: 'internship', title: '第一份实习复盘：我怎么整理简历里的项目经历', category: 'career', tags: ['notes', 'internship'], campus: '两江', author: '宋同学', initial: '宋', color: 'gold', createdAt: Date.parse('2026-11-07T13:20:00+08:00'), views: 212, body: '最开始，我的简历只列了项目用过的软件。后来我把每段项目经历改成三句话：做了什么、我负责哪部分、怎么确认它能用。\n\n对一个课程小项目，我附上自己写的说明文档和一张结果截图，面试时就有具体东西可以讲。大家也可以分享自己的改法。', replies: [
-    { id: 'r3', author: '林同学', initial: '林', color: 'violet', createdAt: Date.parse('2026-11-07T14:05:00+08:00'), body: '团队项目也适用，最好说清自己负责的模块和遇到的一个具体问题。' },
-  ] },
-  { id: 'competition', title: '电子设计竞赛想找队友，有人愿意一起从基础练起吗？', category: 'career', tags: ['team', 'project'], campus: '永川', author: '林同学', initial: '林', color: 'violet', createdAt: Date.parse('2026-11-07T11:45:00+08:00'), views: 74, body: '我有一点 C 语言基础，周末想和同校区同学一起做一个小项目。可以先从传感器采样和串口输出开始，一起画个分工表。想加入的同学可以回复自己擅长什么、方便的时间。', replies: [] },
-  { id: 'library', title: '周末想找个能插电脑的自习位置，大家一般去哪？', category: 'life', tags: ['question', 'guide'], campus: '大学城', author: '许同学', initial: '许', color: 'rose', createdAt: Date.parse('2026-11-06T20:10:00+08:00'), views: 58, body: '带电脑做课程项目，希望是能找到插座、可以坐一会儿的地方。有没有同学分享最近的体验？也想了解一下周末开放时间去哪里确认。', replies: [] },
-  { id: 'lab-notes', title: '我怎么写实验记录，复现时才不用从头再试', category: 'study', tags: ['notes', 'project'], campus: '两江', author: '周同学', initial: '周', color: 'blue', createdAt: Date.parse('2026-11-06T16:30:00+08:00'), views: 93, body: '每次实验我会记录四项：软件版本、输入条件、实际结果、下一次要验证的变化。调试时一次只改一处，这样即使实验没成功，也能判断哪一步出了问题。\n\n如果发给同学，记得附上能复现的最小例子，并说明依赖和数据从哪里来。', replies: [
-    { id: 'r4', author: '许同学', initial: '许', color: 'rose', createdAt: Date.parse('2026-11-06T18:10:00+08:00'), body: '记版本特别有用，同一个工程换电脑后遇到过好几次环境差异。' },
-  ] },
 ];
 
 const $ = (selector) => document.querySelector(selector);
 const query = $('#query');
 const feed = $('#feed');
 const topicPage = $('#topic-page');
+const profilePage = $('#profile-page');
 const composer = $('#composer');
 const postForm = $('#post-form');
 const authDialog = $('#auth-dialog');
 const authForm = $('#auth-form');
+const notifDialog = $('#notif-dialog');
+const reportDialog = $('#report-dialog');
+const reportForm = $('#report-form');
 const lightbox = $('#lightbox');
 const storageKey = 'cqetc-campus-demo-v2';
 const fullDate = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' });
+const shortDate = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' });
 const filters = { category: 'all', campus: 'all', tag: 'all', tab: 'latest', query: '', activeOnly: false };
 
 let isServerMode = false;
 let currentUser = null;
 let currentVerifyQuestion = demoVerifyQuestions[0];
 let authTab = 'register';
+let editingTopicId = null;
+let reportingTopicId = null;
 let pendingImages = [];
 let afterAuthAction = null;
 let toastTimer;
@@ -184,12 +182,7 @@ let searchDebounce;
 function loadDemo() {
   try {
     const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
-    return {
-      posts: data.posts || [],
-      replies: data.replies || {},
-      statusOverrides: data.statusOverrides || {},
-      user: data.user || null,
-    };
+    return { posts: data.posts || [], replies: data.replies || {}, statusOverrides: data.statusOverrides || {}, user: data.user || null };
   } catch {
     return { posts: [], replies: {}, statusOverrides: {}, user: null };
   }
@@ -213,9 +206,7 @@ async function api(url, options = {}) {
     ...options,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.error || `请求失败 (${res.status})`);
-  }
+  if (!res.ok) throw new Error(data.error || `请求失败 (${res.status})`);
   return data;
 }
 
@@ -227,12 +218,12 @@ function icon(name) {
   return `<svg class="icon" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 }
 
-function avatar(person) {
-  return `<span class="avatar ${escapeHtml(person.color || 'violet')}" aria-hidden="true">${escapeHtml(person.initial || '友')}</span>`;
+function avatar(person, extraClass = '') {
+  return `<span class="avatar ${escapeHtml(person.color || 'violet')} ${extraClass}" aria-hidden="true">${escapeHtml(person.initial || '友')}</span>`;
 }
 
 function categoryName(id) {
-  return categories.find((category) => category.id === id)?.name || '校园讨论';
+  return categories.find((c) => c.id === id)?.name || '校园讨论';
 }
 
 function topicHref(id, replyId) {
@@ -281,8 +272,9 @@ function topicMeta(topic, now = Date.now()) {
   const ttlPart = status === 'open' && topic.expiresAt ? `<span class="ttl-pill">${icon('clock')}${remainingText(topic.expiresAt, now)}</span>` : '';
   const imgCount = topic.imageCount ?? topic.images?.length ?? 0;
   const imgPart = imgCount > 0 ? `<span class="img-hint">${icon('image')}${imgCount}</span>` : '';
+  const likePart = topic.likeCount > 0 ? `<span class="like-hint">${icon('heart')}${topic.likeCount}</span>` : '';
   const badges = tagsFor(topic).map(({ id, name, icon: glyph }) => filterButton('tag', id, name, `topic-tag tag-${id}`, icon(glyph)));
-  return `${pinPart}${statusPart}${rewardPart}${badge}<span>${escapeHtml(campus)}</span>${ttlPart}${badges.join('')}${imgPart}${topic.accepted ? `<span class="solved">${icon('check')}已解决</span>` : ''}`;
+  return `${pinPart}${statusPart}${rewardPart}${badge}<span>${escapeHtml(campus)}</span>${ttlPart}${badges.join('')}${imgPart}${likePart}${topic.accepted ? `<span class="solved">${icon('check')}已解决</span>` : ''}`;
 }
 
 function demoRepliesFor(topic) {
@@ -295,7 +287,6 @@ function activityText(timestamp, now) {
   if (minutes < 1410) return `${Math.round(minutes / 60)} 小时`;
   if (minutes < 2520) return '1 天';
   if (minutes <= 30 * 1440) return `${Math.round(minutes / 1440)} 天`;
-
   const date = new Date(timestamp);
   const month = `${date.getMonth() + 1}月`;
   return date.getFullYear() === new Date(now).getFullYear()
@@ -305,7 +296,7 @@ function activityText(timestamp, now) {
 
 function refreshActivity() {
   const now = Date.now();
-  feed.querySelectorAll('[data-activity]').forEach((element) => {
+  document.querySelectorAll('[data-activity]').forEach((element) => {
     const label = activityText(Number(element.dataset.activity), now);
     if (element.textContent !== label) element.textContent = label;
   });
@@ -320,6 +311,49 @@ function choiceInput(option, name, inputAttributes, badgeClass) {
     <span class="choice-badge ${badgeClass}">${icon(option.icon)}${option.name}</span></label>`;
 }
 
+function updateNotifBadge(count) {
+  const btn = $('#notif-button');
+  const badge = $('#notif-badge');
+  btn.hidden = !isServerMode || !currentUser;
+  const n = Number(count || 0);
+  badge.hidden = n <= 0;
+  badge.textContent = n > 99 ? '99+' : String(n);
+}
+
+async function pollUnreadCount() {
+  if (!isServerMode || !currentUser) return;
+  try {
+    const data = await api('/api/notifications/unread-count');
+    updateNotifBadge(data.unreadCount);
+  } catch { /* ignore */ }
+}
+
+async function openNotifDialog() {
+  if (!isServerMode || !currentUser) return;
+  const list = $('#notif-list');
+  list.innerHTML = '<p class="form-note">加载中...</p>';
+  notifDialog.showModal();
+  try {
+    const data = await api('/api/notifications');
+    updateNotifBadge(data.unreadCount);
+    if (!data.notifications.length) {
+      list.innerHTML = '<p class="empty">暂时还没有新通知</p>';
+      return;
+    }
+    const now = Date.now();
+    list.innerHTML = data.notifications.map((n) => `
+      <button type="button" class="notif-item${n.read ? '' : ' unread'}" data-notif-id="${n.id}" data-notif-href="${topicHref(n.topicId, n.replyId)}">
+        ${avatar({ initial: n.actorInitial, color: n.actorColor })}
+        <div class="notif-body">
+          <div>${escapeHtml(n.message)}</div>
+          <div class="notif-time">${activityText(n.createdAt, now)}前</div>
+        </div>
+      </button>`).join('');
+  } catch (err) {
+    list.innerHTML = `<p class="form-note">${escapeHtml(err.message)}</p>`;
+  }
+}
+
 function renderAuthButton() {
   const btn = $('#auth-button');
   if (currentUser) {
@@ -329,6 +363,7 @@ function renderAuthButton() {
     btn.innerHTML = `${icon('user')}<span>${isServerMode ? '登录 / 注册' : '校内验证'}</span>`;
     btn.title = '完成校内验证登录后可发帖、回复和查看联系方式';
   }
+  if (!currentUser) updateNotifBadge(0);
 }
 
 function syncAuthTabUI() {
@@ -369,18 +404,33 @@ function syncAuthTabUI() {
   }
 }
 
-async function loadAdminQuestions() {
-  const list = $('#admin-questions-list');
+async function loadAdminPanels() {
   if (!isServerMode || currentUser?.role !== 'admin') return;
+  const qList = $('#admin-questions-list');
+  const rList = $('#admin-reports-list');
+  qList.innerHTML = '<p class="form-note">加载题库中...</p>';
+  rList.innerHTML = '<p class="form-note">加载举报中...</p>';
   try {
-    const data = await api('/api/admin/questions');
-    list.innerHTML = data.questions.map((q) => `
+    const [qData, rData] = await Promise.all([api('/api/admin/questions'), api('/api/admin/reports')]);
+    qList.innerHTML = qData.questions.map((q) => `
       <div class="admin-q-item">
         <div><strong>${escapeHtml(q.question)}</strong><small>答案：${escapeHtml(q.answers.join(' / '))}</small></div>
         <button type="button" class="text-button danger-text" data-del-question="${q.id}">删除</button>
       </div>`).join('');
+
+    $('#admin-reports-count').textContent = rData.reports.length ? `${rData.reports.length} 条待处理` : '暂无待处理';
+    rList.innerHTML = rData.reports.length
+      ? rData.reports.map((r) => `
+        <div class="admin-q-item">
+          <div>
+            <a href="${topicHref(r.topicId)}" data-close-auth><strong>${escapeHtml(r.topicTitle)}</strong></a>
+            <small>${escapeHtml(r.reporter)} 举报：${escapeHtml(r.reason)}${r.detail ? `（${escapeHtml(r.detail)}）` : ''}</small>
+          </div>
+          <button type="button" class="text-button" data-resolve-report="${r.id}">已处理</button>
+        </div>`).join('')
+      : '<p class="form-note">社区目前很干净，没有待处理的举报。</p>';
   } catch (err) {
-    list.innerHTML = `<p class="form-note">${escapeHtml(err.message)}</p>`;
+    qList.innerHTML = `<p class="form-note">${escapeHtml(err.message)}</p>`;
   }
 }
 
@@ -397,10 +447,16 @@ async function openAuthDialog(onSuccess = null, preferredTab = 'register') {
     const sub = isServerMode
       ? `@${escapeHtml(currentUser.username)} · ${escapeHtml(currentUser.campus)}校区`
       : `${escapeHtml(currentUser.campus)}校区 · 本地演示验证`;
-    $('#auth-profile').innerHTML = `${avatar(currentUser)}<div><strong>${escapeHtml(currentUser.nickname)}</strong>${roleTag}<div class="form-note">${sub}</div></div>`;
+    const profileBtn = isServerMode && currentUser.id
+      ? `<a class="button secondary small" href="#user/${currentUser.id}" data-close-auth>我的主页</a>`
+      : '';
+    $('#auth-profile').innerHTML = `<div class="auth-profile-left">${avatar(currentUser)}<div><strong>${escapeHtml(currentUser.nickname)}</strong>${roleTag}<div class="form-note">${sub}</div></div></div>${profileBtn}`;
+    $('#change-password-box').hidden = !isServerMode;
+    $('#change-password-box').open = false;
     const isAdmin = isServerMode && currentUser.role === 'admin';
+    $('#admin-reports-panel').hidden = !isAdmin;
     $('#admin-questions-panel').hidden = !isAdmin;
-    if (isAdmin) loadAdminQuestions();
+    if (isAdmin) loadAdminPanels();
   } else {
     authTab = preferredTab;
     $('#auth-form').hidden = false;
@@ -410,7 +466,7 @@ async function openAuthDialog(onSuccess = null, preferredTab = 'register') {
       try {
         const res = await api('/api/verify-question');
         if (res.verifyQuestion) currentVerifyQuestion = res.verifyQuestion;
-      } catch { /* fallback to existing */ }
+      } catch { /* ignore */ }
     }
     if (currentVerifyQuestion) {
       $('#verify-question-label').textContent = `校内验证题：${currentVerifyQuestion.question}`;
@@ -424,26 +480,9 @@ async function openAuthDialog(onSuccess = null, preferredTab = 'register') {
   }
 }
 
-function renderTopicRows(items) {
+function buildTopicTableHtml(items) {
   const now = Date.now();
-  const activeTag = tags.find(({ id }) => id === filters.tag);
-  const words = filters.query.trim();
-  const filtered = filters.category !== 'all' || filters.campus !== 'all' || activeTag || filters.tab !== 'latest' || filters.activeOnly || Boolean(words);
-  $('#feed-title').textContent = words ? '搜索结果' : filters.category === 'all' ? '校园讨论' : categoryName(filters.category);
-  const labelParts = [];
-  if (filters.campus !== 'all') labelParts.push(`${filters.campus}校区`);
-  if (activeTag) labelParts.push(activeTag.name);
-  if (words) labelParts.push(`含“${words}”`);
-  $('#feed-subtitle').textContent = labelParts.length ? `${labelParts.join(' · ')} · ${items.length} 篇` : `${items.length} 篇帖子`;
-  $('#reset-filters').hidden = !filtered;
-
-  if (!items.length) {
-    feed.innerHTML = `<div class="empty"><h2>还没有符合条件的帖子</h2><p>试试放宽筛选条件，或者发一条新的校园讨论 / 互助帖。</p>
-      <button class="button secondary" data-reset type="button">查看全部讨论</button></div>`;
-    return;
-  }
-
-  feed.innerHTML = `<table class="topic-list">
+  return `<table class="topic-list">
     <caption class="visually-hidden">校园帖子列表</caption>
     <thead><tr>
       <th scope="col">主题</th>
@@ -466,12 +505,32 @@ function renderTopicRows(items) {
           <a class="topic-title" href="${topicHref(topic.id)}">${escapeHtml(topic.title)}</a>
           <span class="topic-meta">${topicMeta(topic, now)}<span class="mobile-time">${activity}</span></span>
         </th>
-        <td class="people-column"><span class="participant-list" title="${names}"><span class="visually-hidden">${names}</span>${people.map(avatar).join('')}</span></td>
+        <td class="people-column"><span class="participant-list" title="${names}"><span class="visually-hidden">${names}</span>${people.map((p) => avatar(p)).join('')}</span></td>
         <td class="reply-count"><span class="reply-glyph">${icon('chat')}<span class="visually-hidden">回复数：</span></span>${topic.replyCount}</td>
         <td class="views-column">${topic.views}</td>
         <td class="desktop-column">${activity}</td>
       </tr>`;
     }).join('')}</tbody></table>`;
+}
+
+function renderTopicRows(items) {
+  const activeTag = tags.find(({ id }) => id === filters.tag);
+  const words = filters.query.trim();
+  const filtered = filters.category !== 'all' || filters.campus !== 'all' || activeTag || filters.tab !== 'latest' || filters.activeOnly || Boolean(words);
+  $('#feed-title').textContent = words ? '搜索结果' : filters.category === 'all' ? '校园讨论' : categoryName(filters.category);
+  const labelParts = [];
+  if (filters.campus !== 'all') labelParts.push(`${filters.campus}校区`);
+  if (activeTag) labelParts.push(activeTag.name);
+  if (words) labelParts.push(`含“${words}”`);
+  $('#feed-subtitle').textContent = labelParts.length ? `${labelParts.join(' · ')} · ${items.length} 篇` : `${items.length} 篇帖子`;
+  $('#reset-filters').hidden = !filtered;
+
+  if (!items.length) {
+    feed.innerHTML = `<div class="empty"><h2>还没有符合条件的帖子</h2><p>试试放宽筛选条件，或者发一条新的校园讨论 / 互助帖。</p>
+      <button class="button secondary" data-reset type="button">查看全部讨论</button></div>`;
+    return;
+  }
+  feed.innerHTML = buildTopicTableHtml(items);
 }
 
 async function renderFeed() {
@@ -498,7 +557,6 @@ async function renderFeed() {
     return;
   }
 
-  // Fallback local demo mode
   const now = Date.now();
   const words = filters.query.toLowerCase().trim().split(/\s+/).filter(Boolean);
   const activeTag = tags.find(({ id }) => id === filters.tag);
@@ -537,9 +595,12 @@ async function renderFeed() {
   renderTopicRows(normalized);
 }
 
-function authorLine(person) {
+function authorLine(person, extraText = '') {
   const date = person.createdAt ? fullDate.format(person.createdAt) : '时间未知';
-  return `<div class="author">${avatar(person)}<strong>${escapeHtml(person.author)}</strong><span>${escapeHtml(date)}</span></div>`;
+  const namePart = isServerMode && person.authorId
+    ? `<a class="author-link" href="#user/${person.authorId}">${avatar(person)}<strong>${escapeHtml(person.author)}</strong></a>`
+    : `${avatar(person)}<strong>${escapeHtml(person.author)}</strong>`;
+  return `<div class="author">${namePart}<span>${escapeHtml(date)}${extraText ? ` · ${escapeHtml(extraText)}` : ''}</span></div>`;
 }
 
 function renderHelpPanel(topic, now) {
@@ -575,6 +636,27 @@ function renderHelpPanel(topic, now) {
   </div>`;
 }
 
+function openEditComposer(topic) {
+  editingTopicId = topic.id;
+  $('#composer-title').textContent = '编辑帖子';
+  $('#submit-post-btn').textContent = '保存修改';
+  postForm.elements.title.value = topic.title;
+  postForm.elements.category.value = topic.category;
+  postForm.elements.campus.value = topic.campus;
+  postForm.elements.body.value = topic.body;
+  postForm.elements.reward.value = topic.reward || '';
+  postForm.elements.contact.value = topic.editContact ?? topic.contact ?? '';
+  postForm.elements.ttl.value = '';
+  postForm.querySelectorAll('input[name="tags"]').forEach((box) => {
+    box.checked = Boolean(topic.tags?.includes(box.value));
+  });
+  pendingImages = [...(topic.images || [])];
+  syncComposerHelpFields();
+  renderUploadPreviews();
+  composer.showModal();
+  postForm.elements.title.focus();
+}
+
 function renderTopicView(topic) {
   const now = Date.now();
   const replies = isServerMode ? (topic.replies || []) : demoRepliesFor(topic);
@@ -585,7 +667,17 @@ function renderTopicView(topic) {
   const adminBar = isServerMode && (topic.canPin || topic.canManage)
     ? `<div class="topic-admin-actions">
         ${topic.canPin ? `<button class="button secondary small" id="pin-topic-btn" type="button">${icon('thumbtack')}<span>${topic.pinned ? '取消置顶' : '置顶'}</span></button>` : ''}
-        ${topic.canManage ? `<button class="button secondary small danger-text" id="delete-topic-btn" type="button">${icon('trash')}<span>删除帖子</span></button>` : ''}
+        ${topic.canManage ? `<button class="button secondary small" id="edit-topic-btn" type="button">${icon('edit')}<span>编辑</span></button>` : ''}
+        ${topic.canManage ? `<button class="button secondary small danger-text" id="delete-topic-btn" type="button">${icon('trash')}<span>删除</span></button>` : ''}
+      </div>`
+    : '';
+
+  const topicFooter = isServerMode
+    ? `<div class="topic-footer-bar">
+        <button type="button" class="like-btn${topic.liked ? ' is-liked' : ''}" id="like-topic-btn" data-like-type="topic" data-like-id="${escapeHtml(topic.id)}">
+          ${icon('heart')}<span>${topic.liked ? '已赞' : '赞'}</span><span class="like-num">${topic.likeCount || 0}</span>
+        </button>
+        ${!topic.canManage ? `<button type="button" class="text-button" id="report-topic-btn">${icon('alert')} 举报</button>` : ''}
       </div>`
     : '';
 
@@ -597,15 +689,19 @@ function renderTopicView(topic) {
     <article class="topic-card">
       <h1>${escapeHtml(topic.title)}</h1>
       <div class="topic-meta">${topicMeta(topic, now)}</div>
-      ${authorLine(topic)}
+      ${authorLine(topic, topic.updatedAt ? '已编辑' : '')}
       ${renderHelpPanel(topic, now)}
       <p class="topic-body">${escapeHtml(topic.body)}</p>
       ${imagesHtml}
+      ${topicFooter}
     </article>
     <section class="replies" aria-labelledby="reply-heading">
       <h2 id="reply-heading">${replies.length} 条回复</h2>
       ${replies.length ? replies.map((reply) => {
         const isAccepted = topic.accepted === reply.id;
+        const likeBtn = isServerMode
+          ? `<button type="button" class="like-btn mini${reply.liked ? ' is-liked' : ''}" data-like-type="reply" data-like-id="${escapeHtml(reply.id)}">${icon('heart')}<span class="like-num">${reply.likeCount || 0}</span></button>`
+          : '';
         const acceptBtn = isServerMode && topic.canManage
           ? `<button type="button" class="text-button" data-accept-reply="${escapeHtml(reply.id)}">${isAccepted ? '取消采纳' : '采纳答案'}</button>`
           : '';
@@ -616,7 +712,7 @@ function renderTopicView(topic) {
         <article id="reply-anchor-${escapeHtml(reply.id)}" class="reply${isAccepted ? ' solved-reply' : ''}" tabindex="-1">
           <div class="author-row">
             ${authorLine(reply)}
-            ${acceptBtn || delBtn ? `<div class="reply-actions">${acceptBtn}${delBtn}</div>` : ''}
+            ${likeBtn || acceptBtn || delBtn ? `<div class="reply-actions">${likeBtn}${acceptBtn}${delBtn}</div>` : ''}
           </div>
           ${isAccepted ? `<div class="topic-meta"><span class="solved">${icon('check')}采纳答案</span></div>` : ''}
           <p>${escapeHtml(reply.body)}</p>
@@ -628,8 +724,16 @@ function renderTopicView(topic) {
       </form>
     </section>`;
 
-  $('#reveal-contact-btn')?.addEventListener('click', () => {
-    openAuthDialog(() => renderRoute(false));
+  $('#reveal-contact-btn')?.addEventListener('click', () => openAuthDialog(() => renderRoute(false)));
+  $('#edit-topic-btn')?.addEventListener('click', () => openEditComposer(topic));
+  $('#report-topic-btn')?.addEventListener('click', () => {
+    const launchReport = () => {
+      reportingTopicId = topic.id;
+      reportForm.reset();
+      reportDialog.showModal();
+    };
+    if (!currentUser) openAuthDialog(launchReport);
+    else launchReport();
   });
 
   $('#copy-contact-btn')?.addEventListener('click', async () => {
@@ -647,10 +751,7 @@ function renderTopicView(topic) {
       const nextStatus = currentStatus === 'open' ? 'closed' : 'open';
       if (isServerMode) {
         try {
-          await api(`/api/topics/${encodeURIComponent(topic.id)}/status`, {
-            method: 'PATCH',
-            body: JSON.stringify({ status: nextStatus }),
-          });
+          await api(`/api/topics/${encodeURIComponent(topic.id)}/status`, { method: 'PATCH', body: JSON.stringify({ status: nextStatus }) });
           showToast(nextStatus === 'closed' ? '已标记为完成，联系方式已自动隐藏' : '已重新开启互助帖');
           await renderRoute(false);
         } catch (err) {
@@ -686,6 +787,27 @@ function renderTopicView(topic) {
     } catch (err) {
       showToast(err.message);
     }
+  });
+
+  topicPage.querySelectorAll('[data-like-type]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const runLike = async () => {
+        try {
+          const res = await api('/api/likes', {
+            method: 'POST',
+            body: JSON.stringify({ targetType: btn.dataset.likeType, targetId: btn.dataset.likeId }),
+          });
+          btn.classList.toggle('is-liked', res.liked);
+          btn.querySelector('.like-num').textContent = String(res.count);
+          const labelSpan = btn.querySelector('span:not(.like-num)');
+          if (labelSpan) labelSpan.textContent = res.liked ? '已赞' : '赞';
+        } catch (err) {
+          showToast(err.message);
+        }
+      };
+      if (!currentUser) openAuthDialog(runLike);
+      else runLike();
+    });
   });
 
   topicPage.querySelectorAll('[data-accept-reply]').forEach((btn) => {
@@ -727,8 +849,7 @@ function renderTopicView(topic) {
 
   $('#reply-form').addEventListener('submit', async (event) => {
     event.preventDefault();
-    const form = event.currentTarget;
-    const input = form.elements.body;
+    const input = event.currentTarget.elements.body;
     const body = input.value.trim();
     if (!body) {
       input.setCustomValidity('请填写回复内容。');
@@ -751,14 +872,7 @@ function renderTopicView(topic) {
         demo.replies[topic.id] ??= [];
         const createdAt = Date.now();
         const author = currentUser?.nickname || '体验同学';
-        demo.replies[topic.id].push({
-          id: `reply-${createdAt}`,
-          author,
-          initial: currentUser?.initial || author.slice(0, 1),
-          color: currentUser?.color || 'violet',
-          createdAt,
-          body,
-        });
+        demo.replies[topic.id].push({ id: `reply-${createdAt}`, author, initial: currentUser?.initial || author.slice(0, 1), color: currentUser?.color || 'violet', createdAt, body });
         const saved = saveDemo();
         renderTopicView(topic);
         showToast(saved ? '回复已保存到当前浏览器' : '回复仅保留在当前页面');
@@ -769,47 +883,81 @@ function renderTopicView(topic) {
   });
 }
 
-async function renderRoute(moveFocus = false) {
-  const [, id, replyId] = location.hash.match(/^#topic\/([a-zA-Z0-9-]+)(?:\/([a-zA-Z0-9-]+))?$/) ?? [];
-  document.body.classList.toggle('is-topic-view', Boolean(id));
-  $('#feed-page').hidden = Boolean(id);
-  topicPage.hidden = !id;
+async function renderProfileView(userId) {
+  if (!isServerMode) {
+    profilePage.innerHTML = `<a class="back-link" href="#">${icon('back')}返回讨论</a><section class="profile-card"><h1>演示模式暂不支持主页</h1></section>`;
+    return;
+  }
+  try {
+    const data = await api(`/api/users/${encodeURIComponent(userId)}`);
+    const p = data.profile;
+    const roleTag = p.role === 'admin' ? '<span class="role-tag">管理员</span>' : '';
+    document.title = `${p.nickname} · 重电校园站`;
+    profilePage.innerHTML = `
+      <div class="topic-top-bar"><a class="back-link" href="#">${icon('back')}返回讨论</a></div>
+      <section class="profile-card">
+        <div class="profile-head">
+          ${avatar(p, 'lg')}
+          <div>
+            <h1>${escapeHtml(p.nickname)}${roleTag}</h1>
+            <div class="profile-meta">${escapeHtml(p.campus)}校区 · ${shortDate.format(p.createdAt)} 加入</div>
+          </div>
+        </div>
+        <div class="profile-stats">
+          <div><strong>${p.topicCount}</strong>发帖</div>
+          <div><strong>${p.replyCount}</strong>回复</div>
+          <div><strong>${p.likesReceived}</strong>获赞</div>
+        </div>
+        <h2 class="profile-section-title">最近发布的帖子</h2>
+        ${data.topics.length ? buildTopicTableHtml(data.topics) : '<p class="topic-empty">还没有发布过帖子。</p>'}
+      </section>`;
+  } catch (err) {
+    profilePage.innerHTML = `<a class="back-link" href="#">${icon('back')}返回讨论</a><section class="profile-card"><h1>无法加载同学主页</h1><p>${escapeHtml(err.message)}</p></section>`;
+  }
+}
 
-  if (!id) {
+async function renderRoute(moveFocus = false) {
+  const topicMatch = location.hash.match(/^#topic\/([a-zA-Z0-9-]+)(?:\/([a-zA-Z0-9-]+))?$/);
+  const userMatch = location.hash.match(/^#user\/(\d+)$/);
+  const isDetail = Boolean(topicMatch || userMatch);
+
+  document.body.classList.toggle('is-topic-view', isDetail);
+  $('#feed-page').hidden = isDetail;
+  topicPage.hidden = !topicMatch;
+  profilePage.hidden = !userMatch;
+
+  if (userMatch) {
+    await renderProfileView(userMatch[1]);
+  } else if (!topicMatch) {
     document.title = '重电校园站 · 校园问答与互助社区';
     await renderFeed();
-  } else if (isServerMode) {
-    try {
-      const data = await api(`/api/topics/${encodeURIComponent(id)}`);
-      const topic = data.topic;
-      renderTopicView(topic);
-      document.title = `${topic.title} · 重电校园站`;
-      const reply = replyId && document.getElementById(`reply-anchor-${replyId}`);
-      if (reply) {
-        reply.classList.add('reply-target');
-        reply.scrollIntoView({ block: 'start' });
-        if (moveFocus) reply.focus({ preventScroll: true });
-        return;
-      }
-    } catch (err) {
-      topicPage.innerHTML = `<a class="back-link" href="#">${icon('back')}返回讨论</a><section class="topic-card"><h1>无法打开这篇帖子</h1><p>${escapeHtml(err.message)}</p></section>`;
-      document.title = '帖子详情 · 重电校园站';
-    }
   } else {
-    const topic = [...demo.posts, ...seed].find((item) => item.id === id);
-    if (topic) {
-      renderTopicView(topic);
-      document.title = `${topic.title} · 重电校园站`;
-      const reply = replyId && document.getElementById(`reply-anchor-${replyId}`);
-      if (reply) {
-        reply.classList.add('reply-target');
-        reply.scrollIntoView({ block: 'start' });
-        if (moveFocus) reply.focus({ preventScroll: true });
-        return;
+    const [, id, replyId] = topicMatch;
+    if (isServerMode) {
+      try {
+        const data = await api(`/api/topics/${encodeURIComponent(id)}`);
+        const topic = data.topic;
+        renderTopicView(topic);
+        document.title = `${topic.title} · 重电校园站`;
+        const reply = replyId && document.getElementById(`reply-anchor-${replyId}`);
+        if (reply) {
+          reply.classList.add('reply-target');
+          reply.scrollIntoView({ block: 'start' });
+          if (moveFocus) reply.focus({ preventScroll: true });
+          return;
+        }
+      } catch (err) {
+        topicPage.innerHTML = `<a class="back-link" href="#">${icon('back')}返回讨论</a><section class="topic-card"><h1>无法打开这篇帖子</h1><p>${escapeHtml(err.message)}</p></section>`;
+        document.title = '帖子详情 · 重电校园站';
       }
     } else {
-      topicPage.innerHTML = `<a class="back-link" href="#">${icon('back')}返回讨论</a><section class="topic-card"><h1>当前浏览器没有这篇帖子</h1><p>演示中发布的内容只能在发布时使用的浏览器中查看。</p></section>`;
-      document.title = '帖子详情 · 重电校园站';
+      const topic = [...demo.posts, ...seed].find((item) => item.id === id);
+      if (topic) {
+        renderTopicView(topic);
+        document.title = `${topic.title} · 重电校园站`;
+      } else {
+        topicPage.innerHTML = `<a class="back-link" href="#">${icon('back')}返回讨论</a><section class="topic-card"><h1>当前浏览器没有这篇帖子</h1></section>`;
+      }
     }
   }
 
@@ -841,6 +989,8 @@ function showToast(message) {
 function syncComposerHelpFields() {
   const isHelp = postForm.elements.category.value === 'help';
   $('#help-fields').hidden = !isHelp;
+  const keepOpt = postForm.elements.ttl.querySelector('option[value=""]');
+  if (keepOpt) keepOpt.hidden = !editingTopicId;
 }
 
 function compressImage(file) {
@@ -856,8 +1006,7 @@ function compressImage(file) {
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(img.width * scale));
         canvas.height = Math.max(1, Math.round(img.height * scale));
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
         resolve(canvas.toDataURL('image/jpeg', 0.8));
       };
       img.src = reader.result;
@@ -871,7 +1020,7 @@ function renderUploadPreviews() {
   container.hidden = pendingImages.length === 0;
   container.innerHTML = pendingImages.map((src, index) => `
     <div class="preview-item">
-      <img src="${src}" alt="待上传图片 ${index + 1}">
+      <img src="${escapeHtml(src)}" alt="待上传图片 ${index + 1}">
       <button type="button" class="preview-remove" data-remove-img="${index}" aria-label="移除图片">${icon('close')}</button>
     </div>`).join('');
 }
@@ -886,8 +1035,7 @@ async function addImages(fileList) {
   }
   for (const file of files.slice(0, remaining)) {
     try {
-      const dataUrl = await compressImage(file);
-      pendingImages.push(dataUrl);
+      pendingImages.push(await compressImage(file));
     } catch {
       showToast('有一张图片读取失败，已跳过');
     }
@@ -897,6 +1045,12 @@ async function addImages(fileList) {
 
 function openComposer() {
   const launch = () => {
+    editingTopicId = null;
+    pendingImages = [];
+    postForm.reset();
+    $('#composer-title').textContent = '发布帖子';
+    $('#submit-post-btn').textContent = '发布帖子';
+    postForm.elements.ttl.value = '12';
     if (filters.category !== 'all') postForm.elements.category.value = filters.category;
     if (filters.campus !== 'all') postForm.elements.campus.value = filters.campus;
     else if (currentUser?.campus) postForm.elements.campus.value = currentUser.campus;
@@ -943,6 +1097,7 @@ document.addEventListener('click', async (event) => {
   }
   if (event.target.closest('[data-compose]')) openComposer();
   if (event.target.closest('[data-auth]')) openAuthDialog();
+  if (event.target.closest('[data-close-auth]')) authDialog.close();
 
   const tabBtn = event.target.closest('[data-auth-tab]');
   if (tabBtn) {
@@ -962,10 +1117,64 @@ document.addEventListener('click', async (event) => {
     try {
       await api(`/api/admin/questions/${delQBtn.dataset.delQuestion}`, { method: 'DELETE' });
       showToast('已删除验证题');
-      loadAdminQuestions();
+      loadAdminPanels();
     } catch (err) {
       showToast(err.message);
     }
+  }
+
+  const resolveBtn = event.target.closest('[data-resolve-report]');
+  if (resolveBtn) {
+    try {
+      await api(`/api/admin/reports/${resolveBtn.dataset.resolveReport}/resolve`, { method: 'POST' });
+      showToast('已标记举报为已处理');
+      loadAdminPanels();
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
+  const notifBtn = event.target.closest('[data-notif-id]');
+  if (notifBtn) {
+    const id = notifBtn.dataset.notifId;
+    const href = notifBtn.dataset.notifHref;
+    notifDialog.close();
+    api(`/api/notifications/${id}/read`, { method: 'POST' }).then(pollUnreadCount).catch(() => {});
+    if (href) location.hash = href;
+  }
+});
+
+$('#notif-button').addEventListener('click', openNotifDialog);
+$('#close-notif').addEventListener('click', () => notifDialog.close());
+$('#mark-all-read').addEventListener('click', async () => {
+  try {
+    await api('/api/notifications/read-all', { method: 'POST' });
+    updateNotifBadge(0);
+    openNotifDialog();
+    showToast('已全部标为已读');
+  } catch (err) {
+    showToast(err.message);
+  }
+});
+
+$('#close-report').addEventListener('click', () => reportDialog.close());
+$('#cancel-report').addEventListener('click', () => reportDialog.close());
+reportForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!reportingTopicId) return;
+  try {
+    await api('/api/reports', {
+      method: 'POST',
+      body: JSON.stringify({
+        topicId: reportingTopicId,
+        reason: reportForm.elements.reason.value,
+        detail: reportForm.elements.detail.value.trim(),
+      }),
+    });
+    reportDialog.close();
+    showToast('举报已提交，感谢共同维护社区环境');
+  } catch (err) {
+    showToast(err.message);
   }
 });
 
@@ -986,8 +1195,7 @@ $('#image-input').addEventListener('change', async (event) => {
 composer.addEventListener('paste', async (event) => {
   const items = [...(event.clipboardData?.items || [])].filter((item) => item.type.startsWith('image/'));
   if (!items.length) return;
-  const files = items.map((item) => item.getAsFile()).filter(Boolean);
-  await addImages(files);
+  await addImages(items.map((item) => item.getAsFile()).filter(Boolean));
 });
 
 document.addEventListener('input', (event) => {
@@ -1011,7 +1219,8 @@ query.addEventListener('input', () => {
 });
 document.addEventListener('keydown', (event) => {
   const typing = event.target.matches('input, textarea, select, [contenteditable]');
-  if (!composer.open && !authDialog.open && (event.key === '/' && !typing || event.key.toLowerCase() === 'k' && (event.ctrlKey || event.metaKey))) {
+  const anyModal = composer.open || authDialog.open || notifDialog.open || reportDialog.open;
+  if (!anyModal && (event.key === '/' && !typing || event.key.toLowerCase() === 'k' && (event.ctrlKey || event.metaKey))) {
     event.preventDefault();
     query.focus();
   }
@@ -1041,6 +1250,25 @@ $('#logout-btn').addEventListener('click', async () => {
   showToast('已退出登录');
 });
 
+$('#change-password-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  try {
+    await api('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        oldPassword: form.elements.oldPassword.value,
+        newPassword: form.elements.newPassword.value,
+      }),
+    });
+    form.reset();
+    $('#change-password-box').open = false;
+    showToast('密码已更新，下次登录请使用新密码');
+  } catch (err) {
+    showToast(err.message);
+  }
+});
+
 $('#admin-question-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
@@ -1048,13 +1276,10 @@ $('#admin-question-form').addEventListener('submit', async (event) => {
   const answers = form.elements.answers.value.trim();
   if (!question || !answers) return;
   try {
-    await api('/api/admin/questions', {
-      method: 'POST',
-      body: JSON.stringify({ question, answers }),
-    });
+    await api('/api/admin/questions', { method: 'POST', body: JSON.stringify({ question, answers }) });
     form.reset();
     showToast('新验证题已加入题库');
-    loadAdminQuestions();
+    loadAdminPanels();
   } catch (err) {
     showToast(err.message);
   }
@@ -1069,30 +1294,25 @@ authForm.addEventListener('submit', async (event) => {
   if (isServerMode) {
     submitBtn.disabled = true;
     try {
-      let data;
-      if (authTab === 'login') {
-        data = await api('/api/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({
-            username: authForm.elements.username.value.trim(),
-            password: authForm.elements.password.value,
-          }),
-        });
-      } else {
-        data = await api('/api/auth/register', {
-          method: 'POST',
-          body: JSON.stringify({
-            username: authForm.elements.username.value.trim(),
-            password: authForm.elements.password.value,
-            nickname: authForm.elements.nickname.value.trim(),
-            campus: authForm.elements.campus.value,
-            questionId: currentVerifyQuestion?.id,
-            answer: authForm.elements.answer.value.trim(),
-          }),
-        });
-      }
+      const data = authTab === 'login'
+        ? await api('/api/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ username: authForm.elements.username.value.trim(), password: authForm.elements.password.value }),
+          })
+        : await api('/api/auth/register', {
+            method: 'POST',
+            body: JSON.stringify({
+              username: authForm.elements.username.value.trim(),
+              password: authForm.elements.password.value,
+              nickname: authForm.elements.nickname.value.trim(),
+              campus: authForm.elements.campus.value,
+              questionId: currentVerifyQuestion?.id,
+              answer: authForm.elements.answer.value.trim(),
+            }),
+          });
       currentUser = data.user;
       renderAuthButton();
+      pollUnreadCount();
       authDialog.close();
       showToast(`欢迎你，${currentUser.nickname}（${currentUser.campus}校区）`);
       const next = afterAuthAction;
@@ -1108,25 +1328,22 @@ authForm.addEventListener('submit', async (event) => {
     return;
   }
 
-  // Fallback local demo mode
   const nickname = authForm.elements.nickname.value.trim();
   const campus = authForm.elements.campus.value;
   const answer = authForm.elements.answer.value.trim();
-  const q = demoVerifyQuestions[0];
   if (!nickname) {
     err.textContent = '请填写一个昵称。';
     err.hidden = false;
     return;
   }
-  if (!q.answers.includes(answer)) {
+  if (!demoVerifyQuestions[0].answers.includes(answer)) {
     err.textContent = '验证答案不对哦，提示：三个字，重电同学常用的简称。';
     err.hidden = false;
     authForm.elements.answer.focus();
     return;
   }
   const colors = ['violet', 'blue', 'gold', 'green', 'rose'];
-  const color = colors[nickname.charCodeAt(0) % colors.length];
-  demo.user = { nickname, initial: nickname.slice(0, 1), campus, color, verifiedAt: Date.now() };
+  demo.user = { nickname, initial: nickname.slice(0, 1), campus, color: colors[nickname.charCodeAt(0) % colors.length], verifiedAt: Date.now() };
   currentUser = demo.user;
   saveDemo();
   renderAuthButton();
@@ -1153,26 +1370,35 @@ postForm.addEventListener('submit', async (event) => {
   if (isServerMode) {
     submitBtn.disabled = true;
     try {
-      const res = await api('/api/topics', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: title.value.trim(),
-          body: body.value.trim(),
-          category: category.value,
-          campus: campus.value,
-          tags: selectedTags,
-          reward: reward.value.trim(),
-          ttl: Number(ttl.value),
-          contact: contact.value.trim(),
-          images: pendingImages,
-        }),
-      });
+      const payload = {
+        title: title.value.trim(),
+        body: body.value.trim(),
+        category: category.value,
+        campus: campus.value,
+        tags: selectedTags,
+        reward: reward.value.trim(),
+        contact: contact.value.trim(),
+        images: pendingImages,
+      };
+      if (ttl.value !== '') payload.ttl = Number(ttl.value);
+
+      const isEdit = Boolean(editingTopicId);
+      const res = isEdit
+        ? await api(`/api/topics/${encodeURIComponent(editingTopicId)}`, { method: 'PATCH', body: JSON.stringify(payload) })
+        : await api('/api/topics', { method: 'POST', body: JSON.stringify(payload) });
+
       pendingImages = [];
+      editingTopicId = null;
       postForm.reset();
       composer.close();
-      resetFilters();
-      location.hash = topicHref(res.id);
-      showToast('帖子已发布');
+      if (isEdit) {
+        showToast('帖子修改已保存');
+        await renderRoute(false);
+      } else {
+        resetFilters();
+        location.hash = topicHref(res.id);
+        showToast('帖子已发布');
+      }
     } catch (err) {
       showToast(err.message);
     } finally {
@@ -1181,10 +1407,9 @@ postForm.addEventListener('submit', async (event) => {
     return;
   }
 
-  // Fallback local demo mode
   const createdAt = Date.now();
   const isHelp = category.value === 'help';
-  const ttlHours = Number(ttl.value);
+  const ttlHours = Number(ttl.value || 12);
   const author = currentUser?.nickname || '体验同学';
   const topic = {
     id: `demo-${createdAt}`,
@@ -1219,6 +1444,7 @@ postForm.addEventListener('submit', async (event) => {
 
 window.addEventListener('hashchange', () => renderRoute(true));
 window.setInterval(refreshActivity, 30_000);
+window.setInterval(pollUnreadCount, 45_000);
 
 async function boot() {
   if (location.protocol.startsWith('http')) {
@@ -1228,6 +1454,7 @@ async function boot() {
         isServerMode = true;
         currentUser = data.user || null;
         if (data.verifyQuestion) currentVerifyQuestion = data.verifyQuestion;
+        updateNotifBadge(data.unreadCount);
       }
     } catch {
       isServerMode = false;
