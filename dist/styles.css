@@ -291,9 +291,13 @@ textarea { resize: vertical; }
 .auth-shell input, .auth-shell select { width: 100%; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid #d9cfe0; border-radius: 8px; color: var(--ink); font-size: 14px; line-height: 1.4; background: #fff; transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease; }
 .auth-shell select { line-height: 38px; padding: 0 10px; cursor: pointer; }
 .auth-shell input:focus, .auth-shell select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(128, 28, 128, .12); }
-.auth-shell input.is-invalid { border-color: #d92d20; background: #fffafa; }
-.auth-shell input.is-invalid:focus { box-shadow: 0 0 0 3px rgba(217, 45, 32, .12); }
-.auth-shell input.is-valid { border-color: #2f9e6b; }
+.auth-shell input.is-invalid { border-color: #d92d20; background: #fff9f9; box-shadow: 0 0 0 2px rgba(217, 45, 32, .08); }
+.auth-shell input.is-invalid:focus { border-color: #d92d20; box-shadow: 0 0 0 3px rgba(217, 45, 32, .16); }
+.auth-shell input.is-valid { border-color: #21965f; background: #f8fdf9; box-shadow: 0 0 0 2px rgba(33, 150, 95, .08); }
+.auth-shell input.is-valid:focus { border-color: #1c8553; box-shadow: 0 0 0 3px rgba(33, 150, 95, .16); }
+.field-status { font-size: 11.5px; font-weight: 500; color: var(--muted); white-space: nowrap; transition: color .15s ease; }
+.field-status.is-error { color: #c62828; font-weight: 600; }
+.field-status.is-ok { color: #16794c; font-weight: 600; }
 .auth-shell .pwd-wrap input { padding-right: 40px; }
 .auth-shell .pwd-eye { right: 5px; width: 32px; height: 32px; border-radius: 7px; }
 

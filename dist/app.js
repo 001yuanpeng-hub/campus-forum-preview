@@ -401,20 +401,26 @@ function validatePasswordStrength(password) {
   return inspectPassword(password).error;
 }
 
+function setFieldStatus(el, text = '', tone = '') {
+  if (!el) return;
+  el.textContent = text;
+  el.className = tone ? `field-status ${tone}` : 'field-status';
+}
+
 function updateLivePasswordUI({ input, confirmInput, rulesEl, msgEl, confirmMsgEl, active = true }) {
   if (!input) return;
   if (!active) {
     input.classList.remove('is-invalid', 'is-valid');
     if (confirmInput) confirmInput.classList.remove('is-invalid', 'is-valid');
     if (rulesEl) rulesEl.hidden = true;
-    if (msgEl) msgEl.hidden = true;
-    if (confirmMsgEl) confirmMsgEl.hidden = true;
+    setFieldStatus(msgEl, '');
+    setFieldStatus(confirmMsgEl, '');
     return;
   }
 
   if (rulesEl) rulesEl.hidden = false;
   const val = input.value;
-  const { checks, error, valid } = inspectPassword(val);
+  const { checks, valid } = inspectPassword(val);
   const started = val.length > 0;
 
   if (rulesEl) {
@@ -429,37 +435,29 @@ function updateLivePasswordUI({ input, confirmInput, rulesEl, msgEl, confirmMsgE
   input.classList.toggle('is-valid', started && valid);
   input.classList.toggle('is-invalid', started && !valid);
 
-  if (msgEl) {
-    if (!started) {
-      msgEl.hidden = true;
-    } else if (!valid) {
-      msgEl.textContent = error;
-      msgEl.className = 'field-feedback is-error';
-      msgEl.hidden = false;
-    } else {
-      msgEl.textContent = '✓ 密码格式符合要求';
-      msgEl.className = 'field-feedback is-ok';
-      msgEl.hidden = false;
-    }
+  if (!started) {
+    setFieldStatus(msgEl, '');
+  } else if (!checks.noSpace) {
+    setFieldStatus(msgEl, '不能含空格', 'is-error');
+  } else if (!valid) {
+    setFieldStatus(msgEl, '格式未达标', 'is-error');
+  } else {
+    setFieldStatus(msgEl, '✓ 符合要求', 'is-ok');
   }
 
   if (confirmInput && confirmMsgEl) {
     const cVal = confirmInput.value;
     if (!cVal) {
       confirmInput.classList.remove('is-invalid', 'is-valid');
-      confirmMsgEl.hidden = true;
+      setFieldStatus(confirmMsgEl, '');
     } else if (cVal !== val) {
       confirmInput.classList.add('is-invalid');
       confirmInput.classList.remove('is-valid');
-      confirmMsgEl.textContent = '两次输入的密码不一致，请重新核对。';
-      confirmMsgEl.className = 'field-feedback is-error';
-      confirmMsgEl.hidden = false;
+      setFieldStatus(confirmMsgEl, '两次密码不一致', 'is-error');
     } else {
       confirmInput.classList.remove('is-invalid');
       confirmInput.classList.add('is-valid');
-      confirmMsgEl.textContent = '✓ 两次密码一致';
-      confirmMsgEl.className = 'field-feedback is-ok';
-      confirmMsgEl.hidden = false;
+      setFieldStatus(confirmMsgEl, '✓ 密码一致', 'is-ok');
     }
   }
 }
@@ -499,33 +497,32 @@ function updateLiveEmailUI() {
   const input = authForm.elements.username;
   const msg = $('#reg-username-msg');
   clearTimeout(emailCheckTimer);
+  const defaultHint = authTab === 'login' ? '' : (authTab === 'reset' ? '输入注册邮箱' : '作为登录账号');
   if (!isServerMode || authTab === 'login') {
     availabilityState.email = null;
     input.classList.remove('is-invalid', 'is-valid');
-    msg.hidden = true;
+    setFieldStatus(msg, defaultHint);
     return;
   }
   const val = input.value.trim().toLowerCase();
   if (!val) {
     availabilityState.email = null;
     input.classList.remove('is-invalid', 'is-valid');
-    msg.hidden = true;
+    setFieldStatus(msg, defaultHint);
     return;
   }
   if (!EMAIL_RE.test(val) || val.length > 80) {
     availabilityState.email = false;
     input.classList.add('is-invalid');
     input.classList.remove('is-valid');
-    msg.textContent = '请输入有效的邮箱地址（如 name@qq.com）。';
-    msg.className = 'field-feedback is-error';
-    msg.hidden = false;
+    setFieldStatus(msg, '邮箱格式有误', 'is-error');
     return;
   }
   if (authTab === 'reset') {
     availabilityState.email = true;
     input.classList.remove('is-invalid');
     input.classList.add('is-valid');
-    msg.hidden = true;
+    setFieldStatus(msg, '✓ 格式正确', 'is-ok');
     return;
   }
   input.classList.remove('is-invalid');
@@ -537,15 +534,11 @@ function updateLiveEmailUI() {
       if (data.emailAvailable) {
         input.classList.remove('is-invalid');
         input.classList.add('is-valid');
-        msg.textContent = '✓ 该邮箱可以注册';
-        msg.className = 'field-feedback is-ok';
-        msg.hidden = false;
+        setFieldStatus(msg, '✓ 可注册', 'is-ok');
       } else {
         input.classList.add('is-invalid');
         input.classList.remove('is-valid');
-        msg.textContent = '该邮箱已被注册，可直接登录。';
-        msg.className = 'field-feedback is-error';
-        msg.hidden = false;
+        setFieldStatus(msg, '邮箱已注册', 'is-error');
       }
     } catch { /* ignore */ }
   }, 280);
@@ -558,14 +551,14 @@ function updateLiveNicknameUI() {
   if (!isServerMode || authTab !== 'register') {
     availabilityState.nickname = null;
     input.classList.remove('is-invalid', 'is-valid');
-    msg.hidden = true;
+    setFieldStatus(msg, '');
     return;
   }
   const val = input.value.trim();
   if (!val) {
     availabilityState.nickname = null;
     input.classList.remove('is-invalid', 'is-valid');
-    msg.hidden = true;
+    setFieldStatus(msg, '');
     return;
   }
   input.classList.remove('is-invalid');
@@ -577,15 +570,11 @@ function updateLiveNicknameUI() {
       if (data.nicknameAvailable) {
         input.classList.remove('is-invalid');
         input.classList.add('is-valid');
-        msg.textContent = '✓ 昵称可用';
-        msg.className = 'field-feedback is-ok';
-        msg.hidden = false;
+        setFieldStatus(msg, '✓ 可用', 'is-ok');
       } else {
         input.classList.add('is-invalid');
         input.classList.remove('is-valid');
-        msg.textContent = '该昵称已被使用，请换一个。';
-        msg.className = 'field-feedback is-error';
-        msg.hidden = false;
+        setFieldStatus(msg, '已被使用', 'is-error');
       }
     } catch { /* ignore */ }
   }, 280);
@@ -657,7 +646,7 @@ function syncAuthTabUI() {
   authForm.elements.username.autocomplete = isLogin ? 'username' : 'email';
   authForm.elements.username.placeholder = isLogin ? '输入注册邮箱或管理员账号' : '如：example@qq.com';
   $('#auth-username-label').textContent = isLogin ? '邮箱 / 账号' : '邮箱';
-  $('#auth-username-hint').textContent = isLogin ? '' : (isReset ? '输入注册时绑定的邮箱' : '作为登录账号');
+  $('#reg-pwd-msg').hidden = isLogin;
 
   authForm.elements.password.autocomplete = isLogin ? 'current-password' : 'new-password';
   authForm.elements.password.placeholder = isLogin ? '输入登录密码' : '至少 8 位，含字母、数字和符号';
